@@ -1,354 +1,794 @@
-# Network Intrusion Detection Lab — SOC Dashboard
+# NETWORK INTRUSION DETECTION LAB
 
-A controlled cybersecurity laboratory project demonstrating network reconnaissance, traffic analysis, IDS detection, alert generation, and security-event visualization.
-
-> **Authorized and Isolated Lab** — All attack activity takes place inside a VirtualBox host-only network. No external systems are targeted or compromised.
+> A practical cybersecurity laboratory for simulating controlled network activity, analyzing traffic, detecting suspicious behavior, and visualizing security alerts using open-source tools.
 
 ---
 
-## Real-World NIDS/SOC Context
+## 01. PROJECT OVERVIEW
 
-This project simulates a small-enterprise Security Operations Center (SOC) monitoring workflow. The full detection pipeline is:
+The **Network Intrusion Detection Lab** demonstrates the basic workflow of a **Network Intrusion Detection System (NIDS)** in a controlled and isolated environment.
 
+The project combines reconnaissance, traffic generation, packet analysis, intrusion detection, alert processing, and visualization into a single end-to-end cybersecurity laboratory.
+
+### Proposed Workflow
+
+```text
++------------------------+
+| Attack / Reconnaissance|
++-----------+------------+
+            |
+            v
++------------------------+
+|    Network Traffic     |
++-----------+------------+
+            |
+            v
++------------------------+
+|    Traffic Analysis    |
++-----------+------------+
+            |
+            v
++------------------------+
+|     IDS Detection      |
++-----------+------------+
+            |
+            v
++------------------------+
+|    Security Alerts     |
++-----------+------------+
+            |
+            v
++------------------------+
+|     Visualization      |
++------------------------+
 ```
-Kali Linux          Metasploitable2       Network Traffic
-(Attacker)    --->  (Victim Server)  --->  192.168.56.0/24
-                                                |
-                                           Wireshark
-                                          (Capture .pcap)
-                                                |
-                                           Suricata IDS
-                                          (eve.json alerts)
-                                                |
-                                       Flask SOC Dashboard
-                                        (Parse + Visualize)
+
+All activities are performed against intentionally vulnerable systems inside an isolated laboratory or other explicitly authorized infrastructure.
+
+---
+
+## 02. OBJECTIVES
+
+The primary objectives of this project are:
+
+* Build a controlled cybersecurity laboratory environment.
+* Simulate and study network reconnaissance and controlled attack traffic.
+* Capture and analyze network packets.
+* Detect suspicious network activity using an IDS.
+* Generate and process security alerts.
+* Visualize detected events through a web dashboard.
+* Understand the complete NIDS workflow from traffic generation to alert visualization.
+* Practice collaborative cybersecurity development using Git and GitHub.
+* Perform controlled end-to-end testing of the detection pipeline.
+
+---
+
+## 03. PROPOSED ARCHITECTURE
+
+```text
+                         +----------------+
+                         |   Kali Linux   |
+                         | Attack / Recon |
+                         +-------+--------+
+                                 |
+                                 |
+                                 v
+                         +----------------+
+                         | Metasploitable2|
+                         |     Victim     |
+                         +-------+--------+
+                                 |
+                                 v
+                         +----------------+
+                         | Network Traffic|
+                         +-------+--------+
+                                 |
+                    +------------+------------+
+                    |                         |
+                    v                         v
+             +-------------+           +-------------+
+             |  Wireshark  |           |  Suricata   |
+             |   Analysis  |           |     IDS     |
+             +-------------+           +------+------+
+                                             |
+                                             v
+                                      +-------------+
+                                      |    Alerts   |
+                                      +------+------+
+                                             |
+                                             v
+                                      +-------------+
+                                      |    Alert    |
+                                      |  Processing |
+                                      +------+------+
+                                             |
+                                             v
+                                      +-------------+
+                                      |    Flask    |
+                                      |  Dashboard  |
+                                      +-------------+
 ```
 
-The project does **not** claim to invent a new IDS. Its contribution is the practical integration of:
-- Controlled attack generation (Kali + nmap + Metasploit)
-- Passive traffic capture (Wireshark)
-- Rule-based intrusion detection (Suricata)
-- Alert parsing and normalisation (Python)
-- SOC-style security analytics dashboard (Flask + Chart.js)
+### Architecture Components
+
+| Component        | Purpose                                     |
+| ---------------- | ------------------------------------------- |
+| Kali Linux       | Attack simulation and reconnaissance        |
+| Metasploitable2  | Intentionally vulnerable target environment |
+| Wireshark        | Packet capture and traffic analysis         |
+| Suricata         | Network intrusion detection                 |
+| Alert Processing | Processes and prepares IDS alerts           |
+| Flask            | Web-based visualization dashboard           |
+| Git / GitHub     | Version control and team collaboration      |
 
 ---
 
-## Team
+## 04. LAB ENVIRONMENT
 
-| Name | Role |
-|------|------|
-| **Devansh Chaubey** (Leader) | Attack / Reconnaissance Module + Project Integration |
-| Divija Srivastava | Suricata IDS / Detection Module |
-| Manya | Metasploitable2 Victim Environment + Wireshark / Traffic Analysis |
-| Anshika Srivastava | Flask / Python Dashboard and Visualization |
-| Sharat Chodhary | Integration and Testing |
+The project uses an isolated virtualized environment to safely perform cybersecurity experiments.
 
----
+### Virtualization
 
-## Features
-
-- **Main Dashboard** — Stat cards (total, critical, high, medium, low, today, unique IPs), alert timeline chart, protocol distribution, attack categories, top source/destination IPs, top destination ports, and recent alerts
-- **Alert Investigation** — Full-featured table with search, multi-filter (severity, category, protocol, source IP, destination IP), column sorting, and pagination
-- **Alert Detail Modal** — All Suricata fields: timestamp, signature, SID, GID, severity, category, source/destination IP/port, protocol, flow ID, action, plus raw Suricata JSON
-- **Traffic Analysis** — Source→destination flow pairs, protocol breakdown, top talkers, source/destination port charts. All derived from alert data (no invented metrics)
-- **PCAP Analysis** — Secure file upload (.pcap/.pcapng), offline analysis workflow documentation, uploaded file list
-- **Detection Rules** — SID, signature, category, severity, protocol, enabled/disabled state. Demo ruleset shown when no real rules file is configured
-- **System Status** — Truthful status for all components (ONLINE, OFFLINE, SIMULATION MODE, UNKNOWN, OFFLINE WORKFLOW). Never fakes live connectivity
-- **Project / About** — Architecture flow, technology stack, team members, and lab disclaimer
-
----
-
-## Technology Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.x + Flask |
-| Frontend | HTML5, Vanilla CSS (Glassmorphism), Vanilla JavaScript |
-| Charts | Chart.js (CDN) |
-| Icons | Inline SVG |
-| Storage | JSON file (eve.json) — no database required |
-| Testing | pytest |
-
----
-
-## Project Structure
-
+```text
++--------------------------------------------------+
+|                 Oracle VirtualBox                |
+|                                                  |
+|   +----------------+       +----------------+    |
+|   |   Kali Linux   |       | Metasploitable2|    |
+|   |                |       |                |    |
+|   | Attack System  | <---> | Victim System  |    |
+|   +----------------+       +----------------+    |
+|                                                  |
+|              Host-Only Network                  |
++--------------------------------------------------+
 ```
-DASHBOARD/
-├── app.py                    # Flask application entry point
-├── config.py                 # Configuration (reads .env)
-├── requirements.txt          # Python dependencies
-├── .env.example              # Environment variable template
-├── generate_demo_data.py     # Demo data generator
+
+The laboratory uses **Host-only networking** to allow communication between the virtual machines while keeping the testing environment isolated from the external network.
+
+---
+
+## 05. TEAM
+
+| Member                 | Responsibility                        |
+| ---------------------- | ------------------------------------- |
+| **Devansh Chaubey**    | Team Leader & Attack / Reconnaissance |
+| **Divija Srivastava**  | IDS & Detection / Suricata            |
+| **Manya**              | Victim Environment & Traffic Analysis |
+| **Anshika Srivastava** | Flask / Python Dashboard              |
+| **Sharat Chodhary**    | Integration & Testing                 |
+
+---
+
+## 06. TECHNOLOGY STACK
+
+### Infrastructure
+
+```text
+Oracle VirtualBox
+Kali Linux
+Metasploitable2
+Ubuntu
+```
+
+### Security & Network Tools
+
+```text
+Nmap
+Wireshark
+Suricata
+```
+
+### Development
+
+```text
+Python
+Flask
+Git
+GitHub
+```
+
+---
+
+## 07. PROJECT MODULES
+
+The project is divided into several major modules.
+
+### 07.1 ATTACK / RECONNAISSANCE
+
+Responsible for generating controlled network activity and reconnaissance traffic from the attacker machine.
+
+Primary tool:
+
+```text
+Nmap
+```
+
+Activities include:
+
+* Host discovery
+* Port scanning
+* Service enumeration
+* Controlled reconnaissance
+* Authorized attack simulation
+
+---
+
+### 07.2 TRAFFIC ANALYSIS
+
+Responsible for capturing and analyzing the network traffic generated during laboratory activities.
+
+Primary tool:
+
+```text
+Wireshark
+```
+
+Activities include:
+
+* Packet capture
+* Protocol identification
+* Traffic inspection
+* Source and destination analysis
+* Identification of suspicious network patterns
+
+---
+
+### 07.3 IDS / DETECTION
+
+Responsible for detecting suspicious traffic and generating security alerts.
+
+Primary tool:
+
+```text
+Suricata
+```
+
+Activities include:
+
+* IDS configuration
+* Detection rule development
+* Traffic inspection
+* Signature-based detection
+* Alert generation
+
+---
+
+### 07.4 ALERT PROCESSING
+
+The alert-processing layer receives IDS-generated alerts and prepares the relevant information for visualization.
+
+Proposed responsibilities:
+
+```text
+Suricata Alerts
+       |
+       v
+Alert Parsing
+       |
+       v
+Event Processing
+       |
+       v
+Structured Alert Data
+       |
+       v
+Dashboard
+```
+
+---
+
+### 07.5 DASHBOARD
+
+The dashboard provides a visual representation of detected security events.
+
+Technology:
+
+```text
+Python + Flask
+```
+
+Possible dashboard information includes:
+
+* Detected events
+* Alert severity
+* Source IP
+* Destination IP
+* Protocol
+* Timestamp
+* Detection signature
+* Event count
+
+---
+
+## 08. CURRENT PROGRESS
+
+### COMPLETED
+
+```text
+[✓] VirtualBox laboratory setup
+[✓] Kali Linux VM setup
+[✓] Metasploitable2 VM setup
+[✓] Host-only networking
+[✓] Kali <-> Metasploitable2 communication
+[✓] Nmap reconnaissance
+[✓] Service enumeration
+[✓] Wireshark packet capture
+[✓] Initial traffic analysis
+[✓] Git / GitHub collaboration setup
+```
+
+### IN PROGRESS
+
+```text
+[~] Suricata detection environment
+[~] Detection rules
+[~] Alert processing
+[~] Flask dashboard
+[~] System integration
+[~] Integration testing
+```
+
+### NEXT STEPS
+
+```text
+[ ] Complete attack -> detection -> visualization pipeline
+[ ] Implement end-to-end alert processing
+[ ] Complete Flask dashboard
+[ ] Perform multi-machine demonstration
+[ ] Conduct complete integration testing
+[ ] Validate detection results
+[ ] Perform final refinement
+[ ] Prepare final project demonstration
+```
+
+---
+
+## 09. END-TO-END PIPELINE
+
+The final system is intended to demonstrate the following complete workflow:
+
+```text
+                         ATTACKER
+                            |
+                            v
+                    +---------------+
+                    |   Kali Linux  |
+                    +-------+-------+
+                            |
+                            | Reconnaissance /
+                            | Controlled Traffic
+                            v
+                    +---------------+
+                    | Metasploitable|
+                    |      2        |
+                    +-------+-------+
+                            |
+                            v
+                    +---------------+
+                    | Network       |
+                    | Traffic       |
+                    +-------+-------+
+                            |
+                 +----------+----------+
+                 |                     |
+                 v                     v
+          +-------------+       +-------------+
+          |  Wireshark  |       |  Suricata   |
+          |   Analysis  |       |     IDS     |
+          +-------------+       +------+------+
+                                       |
+                                       v
+                                +-------------+
+                                | IDS Alerts  |
+                                +------+------+
+                                       |
+                                       v
+                                +-------------+
+                                |    Alert    |
+                                |  Processing |
+                                +------+------+
+                                       |
+                                       v
+                                +-------------+
+                                |    Flask    |
+                                |  Dashboard  |
+                                +-------------+
+```
+
+---
+
+## 10. REPOSITORY STRUCTURE
+
+```text
+Network-Intrusion-Detection-Lab/
 │
-├── backend/
-│   ├── __init__.py
-│   ├── parser.py             # Suricata eve.json parser
-│   ├── store.py              # In-memory data store + query helpers
-│   ├── routes.py             # Flask API blueprints
-│   ├── pcap_handler.py       # Secure PCAP upload handler
-│   └── rules.py              # Suricata rules file reader
+├── attack/
+│   ├── reconnaissance/
+│   └── README.md
 │
-├── frontend/
+├── analysis/
+│   ├── captures/
+│   ├── screenshots/
+│   └── README.md
+│
+├── detection/
+│   ├── rules/
+│   ├── suricata/
+│   └── README.md
+│
+├── dashboard/
+│   ├── app.py
 │   ├── templates/
-│   │   └── index.html        # Single-page app template
-│   └── static/
-│       ├── css/style.css     # Glassmorphism design system
-│       └── js/app.js         # SPA routing + all section logic
+│   ├── static/
+│   └── README.md
 │
-├── data/
-│   ├── demo/
-│   │   └── sample_eve.json   # Bundled realistic demo dataset
-│   └── uploads/              # Uploaded PCAP files (auto-created)
+├── docs/
+│   ├── architecture.md
+│   ├── methodology.md
+│   ├── setup.md
+│   ├── testing.md
+│   └── week1-progress.md
 │
-└── tests/
-    ├── __init__.py
-    ├── test_app.py           # 38 automated tests (pytest)
-    └── verify_api.py         # Live API verification script
+├── README.md
+└── .gitignore
 ```
 
 ---
 
-## Installation
+## 11. REPOSITORY GUIDE
 
-### Prerequisites
-- Python 3.10 or later
-- Internet access (to download Chart.js from CDN when viewing the dashboard)
+| Folder       | Purpose                                                             |
+| ------------ | ------------------------------------------------------------------- |
+| `attack/`    | Nmap reconnaissance and controlled attack activities                |
+| `analysis/`  | Wireshark captures and network traffic analysis                     |
+| `detection/` | Suricata configuration, rules and detection development             |
+| `dashboard/` | Flask / Python dashboard development                                |
+| `docs/`      | Architecture, setup, methodology, testing and project documentation |
 
-### Steps
+---
 
-```bash
-# 1. Clone / navigate to the project directory
-cd "PROJECT EXHIBITION 1/DASHBOARD"
+## 12. DOCUMENTATION
 
-# 2. Create and activate a virtual environment
-python -m venv venv
+Detailed project documentation is maintained inside the `docs/` directory.
 
-# Windows:
-.\venv\Scripts\activate
+```text
+docs/
+│
+├── architecture.md
+├── methodology.md
+├── setup.md
+├── testing.md
+└── week1-progress.md
+```
 
-# Linux / macOS:
-source venv/bin/activate
+### Documentation Overview
 
-# 3. Install dependencies
-pip install -r requirements.txt
+#### `architecture.md`
 
-# 4. (Optional) Regenerate the demo dataset
-python generate_demo_data.py
+Describes:
 
-# 5. Configure environment
-cp .env.example .env
-# Edit .env if needed (defaults work for demo mode)
+* System architecture
+* Network topology
+* Major components
+* Data flow
+* Component interactions
+
+#### `methodology.md`
+
+Describes:
+
+* Project methodology
+* Reconnaissance process
+* Traffic generation
+* Packet analysis
+* IDS detection
+* Alert processing
+
+#### `setup.md`
+
+Contains:
+
+* VirtualBox setup
+* VM configuration
+* Network configuration
+* Required tools
+* Laboratory setup instructions
+
+#### `testing.md`
+
+Describes:
+
+* Test cases
+* Detection validation
+* Integration testing
+* Expected results
+* Observed results
+
+#### `week1-progress.md`
+
+Contains the project's development progress and implementation updates.
+
+---
+
+## 13. SECURITY AND ETHICAL USE
+
+This project is intended strictly for:
+
+```text
+Educational
+     +
+Research
+     +
+Authorized
+     +
+Controlled
+```
+
+All scanning, traffic generation, reconnaissance, and attack activities are performed only against intentionally vulnerable systems inside the controlled project laboratory or other explicitly authorized infrastructure.
+
+No unauthorized systems or networks should be targeted.
+
+---
+
+## 14. PROJECT LEARNING OUTCOMES
+
+Through this project, the team aims to gain practical experience with:
+
+```text
+Network Reconnaissance
+        |
+        v
+Network Protocols
+        |
+        v
+Packet Capture
+        |
+        v
+Traffic Analysis
+        |
+        v
+Intrusion Detection
+        |
+        v
+Security Alerting
+        |
+        v
+Alert Processing
+        |
+        v
+Security Visualization
+        |
+        v
+System Integration
+```
+
+The project also provides practical experience in:
+
+* Linux-based cybersecurity environments
+* Virtual machine networking
+* Network reconnaissance
+* Packet analysis
+* IDS technologies
+* Detection rules
+* Python development
+* Flask web development
+* Git version control
+* GitHub collaboration
+* Team-based cybersecurity development
+
+---
+
+## 15. PROJECT STATUS
+
+```text
+==================================================
+              PROJECT STATUS
+==================================================
+
+Review: 1
+Stage: Early Implementation
+
+--------------------------------------------------
+
+Laboratory Setup              COMPLETED
+Reconnaissance                COMPLETED
+Service Enumeration           COMPLETED
+Packet Analysis               COMPLETED
+Git / GitHub Collaboration    COMPLETED
+
+--------------------------------------------------
+
+Suricata IDS                  IN PROGRESS
+Detection Rules               IN PROGRESS
+Alert Processing              IN PROGRESS
+Flask Dashboard               IN PROGRESS
+System Integration            IN PROGRESS
+
+--------------------------------------------------
+
+Final End-to-End Pipeline     UPCOMING
+Multi-Machine Demo            UPCOMING
+Final Integration Testing     UPCOMING
+Final Refinement              UPCOMING
+
+==================================================
 ```
 
 ---
 
-## Running the Application
+## 16. FINAL GOAL
 
-```bash
-# Make sure the virtual environment is activated first
+The final objective of the project is to create a functional and demonstrable cybersecurity laboratory capable of showing the complete process:
 
-python app.py
+```text
++--------------------+
+| Reconnaissance     |
++---------+----------+
+          |
+          v
++--------------------+
+| Network Activity   |
++---------+----------+
+          |
+          v
++--------------------+
+| Packet Capture     |
++---------+----------+
+          |
+          v
++--------------------+
+| IDS Detection      |
++---------+----------+
+          |
+          v
++--------------------+
+| Security Alert     |
++---------+----------+
+          |
+          v
++--------------------+
+| Alert Processing   |
++---------+----------+
+          |
+          v
++--------------------+
+| Visualization      |
++--------------------+
 ```
 
-Open your browser at: **http://127.0.0.1:5000**
-
-The dashboard starts in **DEMO / SIMULATION MODE** by default, loading the bundled realistic dataset. The UI clearly labels this as demo data.
+The completed system will demonstrate how network activity can be generated in a controlled environment, observed through packet analysis, detected by an IDS, converted into security alerts, and finally presented through a visualization layer.
 
 ---
 
-## Configuration
+## 17. PROJECT PHILOSOPHY
 
-Copy `.env.example` to `.env` and edit as needed:
-
-```env
-DATA_MODE=demo          # "demo" or "suricata"
-FLASK_HOST=127.0.0.1
-FLASK_PORT=5000
-FLASK_DEBUG=false
+```text
+LEARN
+  |
+  v
+BUILD
+  |
+  v
+TEST
+  |
+  v
+ANALYZE
+  |
+  v
+IMPROVE
+  |
+  v
+DEMONSTRATE
 ```
+
+This project focuses on practical cybersecurity learning through controlled experimentation, collaboration, documentation, and iterative development.
 
 ---
 
-## Data Modes
+## 18. PROJECT STATUS SUMMARY
 
-### DEMO / SIMULATION Mode (default)
+```text
+==================================================
+       NETWORK INTRUSION DETECTION LAB
+==================================================
 
-```env
-DATA_MODE=demo
-```
+Environment       : Virtualized Cybersecurity Lab
+Attacker           : Kali Linux
+Target             : Metasploitable2
+Packet Analysis    : Wireshark
+IDS                : Suricata
+Backend / Dashboard: Python + Flask
+Version Control    : Git + GitHub
 
-- Uses `data/demo/sample_eve.json` (172 events including 170 alerts with varied severities, categories, and attack types)
-- Includes realistic Nmap scan alerts, exploitation attempts, DoS events, and malware detection events
-- All using the lab IP range: 192.168.56.0/24
-- Always clearly labelled **SIMULATION MODE** in the UI
+--------------------------------------------------
 
-### Real Suricata Mode
+CURRENT STAGE
+Review 1 — Early Implementation
 
-```env
-DATA_MODE=suricata
-SURICATA_EVE_PATH=/var/log/suricata/eve.json
-```
+--------------------------------------------------
 
-- Reads a real `eve.json` produced by Suricata
-- If the file is missing or unreadable, the dashboard shows an informative state instead of crashing
-- The UI labels data as **LIVE DATA** when a real file is loaded
+CORE LAB
+[✓] Virtual Machines
+[✓] Host-only Network
+[✓] Connectivity
+[✓] Reconnaissance
+[✓] Service Enumeration
+[✓] Packet Capture
+[✓] Initial Traffic Analysis
 
----
+--------------------------------------------------
 
-## Connecting to Real Suricata
+SYSTEM DEVELOPMENT
+[~] Suricata
+[~] Detection Rules
+[~] Alert Processing
+[~] Flask Dashboard
+[~] Integration
 
-### 1. Run Suricata in live mode (on the Suricata machine)
+--------------------------------------------------
 
-```bash
-sudo suricata -c /etc/suricata/suricata.yaml -i eth0
-# Alerts are written to /var/log/suricata/eve.json
-```
+FINAL TARGET
+Attack
+  ↓
+Traffic
+  ↓
+Analysis
+  ↓
+Detection
+  ↓
+Alerts
+  ↓
+Visualization
 
-### 2. Point the dashboard at the eve.json
-
-```env
-DATA_MODE=suricata
-SURICATA_EVE_PATH=/var/log/suricata/eve.json
-```
-
-### 3. Restart the dashboard
-
-```bash
-python app.py
-```
-
-The dashboard reads the file at startup. To refresh, click the **Refresh** button in the top bar (reloads from disk) or restart the app.
-
----
-
-## Offline PCAP Workflow
-
-This is the workflow for analysing a captured PCAP file:
-
-```
-1. Capture traffic with Wireshark → File > Export as capture.pcap
-2. Upload the .pcap file in the dashboard (PCAP section)
-3. Run Suricata offline against the PCAP:
-   suricata -r capture.pcap -c /etc/suricata/suricata.yaml -l /var/log/suricata/
-4. Copy the resulting eve.json to the configured path
-5. Set DATA_MODE=suricata and SURICATA_EVE_PATH accordingly
-6. Restart the dashboard
-```
-
-> **Important:** Uploading a PCAP to the dashboard does NOT automatically run Suricata. This is an offline workflow. The dashboard stores the PCAP file and provides instructions for the offline analysis step.
-
----
-
-## Reconnaissance Commands Used in the Lab
-
-These are the Nmap commands run from Kali Linux. When Suricata detects them, the alerts appear in the dashboard:
-
-```bash
-# Host discovery
-nmap -sn 192.168.56.0/24
-
-# SYN scan (stealthy)
-nmap -sS 192.168.56.110
-
-# Service and version detection
-nmap -sV 192.168.56.110
-
-# OS fingerprinting
-nmap -O 192.168.56.110
-
-# Aggressive scan (OS + version + scripts + traceroute)
-nmap -A 192.168.56.110
-
-# Vulnerability scripts
-sudo nmap --script vuln 192.168.56.110
-```
-
----
-
-## Running Tests
-
-```bash
-# Run the full automated test suite (38 tests)
-.\venv\Scripts\python -m pytest tests/test_app.py -v
-
-# Verify live API endpoints (Flask must be running)
-.\venv\Scripts\python tests\verify_api.py
+==================================================
 ```
 
 ---
 
-## API Endpoints
+## 19. DISCLAIMER
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/health` | Health check |
-| `GET /api/stats` | Summary statistics |
-| `GET /api/alerts` | Paginated, filtered, sorted alerts |
-| `GET /api/alerts/<id>` | Single alert detail |
-| `GET /api/timeline` | Alert counts by time bucket |
-| `GET /api/top-sources` | Top source IPs |
-| `GET /api/top-destinations` | Top destination IPs |
-| `GET /api/protocols` | Protocol distribution |
-| `GET /api/categories` | Alert categories |
-| `GET /api/top-dest-ports` | Top destination ports |
-| `GET /api/flow-pairs` | Source→destination pairs |
-| `GET /api/filter-options` | Available filter values |
-| `GET /api/rules` | Detection rules |
-| `GET /api/system-status` | Component status |
-| `GET /api/pcap/list` | Uploaded PCAP files |
-| `POST /api/pcap/upload` | Upload a PCAP file |
+This repository contains material intended for **authorized cybersecurity education, experimentation, and research**.
 
-### Alert filter parameters
-
-`/api/alerts?search=Nmap&severity=critical&category=...&protocol=TCP&src_ip=192.168.56.101&dest_ip=...&sort_by=timestamp&sort_order=desc&page=1&per_page=25`
+The laboratory is designed around intentionally vulnerable systems and isolated environments. Users are responsible for ensuring that all security testing is performed only on systems they own or have explicit permission to test.
 
 ---
 
-## Troubleshooting
+## 20. PROJECT DEVELOPMENT
 
-| Problem | Solution |
-|---------|----------|
-| `ModuleNotFoundError: flask` | Activate the venv first: `.\venv\Scripts\activate` |
-| Port 5000 already in use | Set `FLASK_PORT=5001` in `.env` |
-| Demo data not loading | Run `python generate_demo_data.py` to regenerate |
-| Charts not rendering | Check browser console; ensure internet access for Chart.js CDN |
-| Suricata eve.json not loading | Check `SURICATA_EVE_PATH` in `.env`; check file permissions |
-| `DATA_MODE=suricata` shows no data | Check the eve.json path and that Suricata has written alert events |
+This project is being developed collaboratively using Git and GitHub.
 
----
+The repository will continue to evolve as the team completes:
 
-## Limitations
-
-1. **No live streaming** — The dashboard reads `eve.json` at startup. It does not tail the file in real-time. Refresh or restart to see new alerts.
-2. **In-memory only** — All alert data is stored in memory. For very large eve.json files (millions of events), consider SQLite or adding a pagination limit at the parser level.
-3. **No authentication** — This is a local lab dashboard. Do not expose it to the internet without adding authentication.
-4. **Traffic metrics are alert-derived** — Packet counts, bandwidth, and total traffic volume are not available from Suricata alert events alone. The traffic section only shows what can be honestly derived from the alert data.
-5. **PCAP upload does not trigger Suricata** — This is an intentional design decision for security. The offline workflow is documented clearly in the UI and in this README.
-6. **No automatic file reload** — Click the Refresh button or restart the server to pick up new alerts from eve.json.
-
----
-
-## Future Improvements
-
-- File-tail mode: watch `eve.json` for new lines and update the dashboard without restart
-- SQLite backend: for persistent storage of large alert volumes
-- User authentication: basic login before accessing the dashboard
-- Alert acknowledgement: mark alerts as reviewed/investigated
-- Custom rule upload: allow uploading `.rules` files through the UI
-- Suricata process management: safely trigger offline PCAP analysis within the dashboard (with strict sandboxing)
-- Export to CSV/PDF: download alert tables for reporting
+```text
+Detection
+     ↓
+Alert Processing
+     ↓
+Dashboard
+     ↓
+Integration
+     ↓
+Testing
+     ↓
+Demonstration
+     ↓
+Final Release
+```
 
 ---
 
-## Security Notes
+# NETWORK INTRUSION DETECTION LAB
 
-- PCAP uploads are validated (extension, size, path traversal prevention)
-- All alert data rendered in the UI is HTML-escaped
-- No shell execution of arbitrary commands
-- No external network calls from the backend (Chart.js loads from CDN in the browser only)
-- `SECRET_KEY` should be changed from the default in any non-local deployment
+```text
+CONTROLLED ENVIRONMENT
+        +
+PRACTICAL SECURITY
+        +
+NETWORK ANALYSIS
+        +
+INTRUSION DETECTION
+        +
+VISUALIZATION
+```
 
 ---
-
-*Built for college exhibition — authorized, isolated, educational cybersecurity laboratory.*
