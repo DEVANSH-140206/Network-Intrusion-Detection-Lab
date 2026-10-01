@@ -13,27 +13,108 @@ from typing import Optional
 
 from backend.parser import parse_eve_file
 
+import threading
+
 logger = logging.getLogger(__name__)
 
 # ─── Cached state ──────────────────────────────────────────────────────────────
 _alerts: list[dict] = []
 _parse_meta: dict = {}
 _loaded: bool = False
+_eve_path: str = ""
+_last_mtime: float = 0.0
+_last_size: int = 0
+_lock = threading.Lock()
 
 
 def load(eve_path: str) -> None:
-    """Parse the eve.json file and cache results."""
-    global _alerts, _parse_meta, _loaded
-    _alerts, _parse_meta = parse_eve_file(eve_path)
-    _loaded = True
-    logger.info("Loaded %d alerts from %s", len(_alerts), eve_path or "(none)")
+    """Parse the eve.json file and cache results in memory."""
+    global _alerts, _parse_meta, _loaded, _eve_path, _last_mtime, _last_size
+    with _lock:
+        _eve_path = eve_path or ""
+        _last_mtime = 0.0
+        _last_size = 0
+
+        if _eve_path and os.path.exists(_eve_path):
+            try:
+                stat = os.stat(_eve_path)
+                _last_mtime = stat.st_mtime
+                _last_size = stat.st_size
+            except OSError as err:
+                logger.warning("Could not stat %s: %s", _eve_path, err)
+
+        _alerts, _parse_meta = parse_eve_file(_eve_path)
+        _loaded = True
+        logger.info(
+            "Loaded %d alerts from %s (size=%d, mtime=%s)",
+            len(_alerts), _eve_path or "(none)", _last_size, _last_mtime
+        )
 
 
-def reload(eve_path: str) -> None:
-    """Force a reload from disk."""
+def reload(eve_path: Optional[str] = None) -> None:
+    """Force an unconditional reload from disk."""
     global _loaded
     _loaded = False
-    load(eve_path)
+    load(eve_path or _eve_path)
+
+
+def refresh_if_modified(eve_path: Optional[str] = None) -> bool:
+    """
+    Check if the eve.json file has been modified on disk (comparing mtime and size).
+    - If modified: reloads newly available Suricata data into memory and returns True.
+    - If unchanged: returns False immediately without re-reading or re-parsing.
+    This provides lightweight, real-time alert updates suitable for small lab environments.
+    """
+    global _alerts, _parse_meta, _loaded, _eve_path, _last_mtime, _last_size
+    path = eve_path or _eve_path
+    if not path:
+        return False
+
+    if not os.path.exists(path):
+        # File was deleted or does not exist yet
+        if _last_mtime != 0.0 or _last_size != 0:
+            with _lock:
+                _last_mtime = 0.0
+                _last_size = 0
+                _alerts = []
+                _parse_meta = {
+                    "total_lines": 0, "alert_lines": 0,
+                    "skipped_non_alert": 0, "skipped_malformed": 0,
+                    "file_path": path, "file_exists": False, "file_readable": False,
+                }
+            return True
+        return False
+
+    try:
+        stat = os.stat(path)
+        current_mtime = stat.st_mtime
+        current_size = stat.st_size
+    except OSError as err:
+        logger.warning("Could not stat %s: %s", path, err)
+        return False
+
+    # Avoid unnecessary reloads if file size and mtime are unchanged
+    if _loaded and current_mtime == _last_mtime and current_size == _last_size:
+        return False
+
+    with _lock:
+        # Double check after acquiring lock
+        if _loaded and current_mtime == _last_mtime and current_size == _last_size:
+            return False
+
+        logger.info(
+            "Live update detected in %s (size: %d -> %d, mtime changed). Reloading...",
+            path, _last_size, current_size
+        )
+        new_alerts, new_meta = parse_eve_file(path)
+        _eve_path = path
+        _last_mtime = current_mtime
+        _last_size = current_size
+        _alerts = new_alerts
+        _parse_meta = new_meta
+        _loaded = True
+        logger.info("Live reload complete: %d alerts currently in memory", len(_alerts))
+        return True
 
 
 def get_parse_meta() -> dict:

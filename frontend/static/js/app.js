@@ -18,6 +18,9 @@ const state = {
   alertsFilters: { search: '', severity: '', category: '', protocol: '', src_ip: '', dest_ip: '' },
   rulesSearch: '',
   dataMode: 'demo',
+  pollTimer: null,
+  lastTotalAlerts: null,
+  isPolling: false,
 };
 
 // ── API Helper ─────────────────────────────────────────────────────────────────
@@ -73,8 +76,20 @@ const loaders = {
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadDashboard() {
   try {
-    const [stats, timeline, topSrc, topDst, protocols, categories, destPorts] = await Promise.all([
-      apiFetch('/api/stats'),
+    const stats = await apiFetch('/api/stats');
+    state.lastTotalAlerts = stats.total_alerts;
+
+    renderStatCards(stats);
+    await refreshDashboardCharts();
+    loadRecentAlerts(true);
+  } catch (e) {
+    showError('dash-error', e.message);
+  }
+}
+
+async function refreshDashboardCharts() {
+  try {
+    const [timeline, topSrc, topDst, protocols, categories, destPorts] = await Promise.all([
       apiFetch('/api/timeline?bucket=hour'),
       apiFetch('/api/top-sources?limit=8'),
       apiFetch('/api/top-destinations?limit=8'),
@@ -83,28 +98,29 @@ async function loadDashboard() {
       apiFetch('/api/top-dest-ports?limit=8'),
     ]);
 
-    renderStatCards(stats);
     renderTimeline(timeline);
     renderProtocolChart(protocols);
     renderCategoryChart(categories);
     renderTopIPs('top-src-list', topSrc, 'ip', 'count');
     renderTopIPs('top-dst-list', topDst, 'ip', 'count');
     renderDestPortsChart(destPorts);
-    loadRecentAlerts();
   } catch (e) {
-    showError('dash-error', e.message);
+    console.debug('Dashboard charts refresh error:', e);
   }
 }
 
 function renderStatCards(stats) {
   const animateValue = (el, target) => {
     if (typeof target !== 'number' || isNaN(target)) { el.textContent = target ?? '—'; return; }
-    const duration = 800;
+    const currentVal = parseInt(el.textContent, 10);
+    if (!isNaN(currentVal) && currentVal === target) return;
+    const startVal = isNaN(currentVal) ? 0 : currentVal;
+    const duration = 600;
     const start = performance.now();
     const step = (now) => {
       const progress = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-      el.textContent = Math.round(eased * target);
+      el.textContent = Math.round(startVal + eased * (target - startVal));
       if (progress < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -291,10 +307,12 @@ function renderTopIPs(listId, data, ipKey, countKey) {
   `).join('');
 }
 
-async function loadRecentAlerts() {
+async function loadRecentAlerts(showSpinner = true) {
   const tbody = document.getElementById('recent-alerts-tbody');
   if (!tbody) return;
-  tbody.innerHTML = loadingRow(7);
+  if (showSpinner || !tbody.children.length) {
+    tbody.innerHTML = loadingRow(7);
+  }
 
   try {
     const data = await apiFetch('/api/alerts?per_page=10&sort_by=timestamp&sort_order=desc');
@@ -307,7 +325,9 @@ async function loadRecentAlerts() {
       row.addEventListener('click', () => openAlertDetail(+row.dataset.id));
     });
   } catch (e) {
-    tbody.innerHTML = errorRow(7, e.message);
+    if (showSpinner || !tbody.children.length) {
+      tbody.innerHTML = errorRow(7, e.message);
+    }
   }
 }
 
@@ -318,7 +338,7 @@ async function loadAlerts() {
   // Populate filter dropdowns once
   if (!document.getElementById('filter-category').options.length > 1) return;
   await populateFilterDropdowns();
-  await fetchAndRenderAlerts();
+  await fetchAndRenderAlerts(true);
 }
 
 async function populateFilterDropdowns() {
@@ -339,10 +359,12 @@ async function populateFilterDropdowns() {
   } catch (_) { /* non-fatal */ }
 }
 
-async function fetchAndRenderAlerts() {
+async function fetchAndRenderAlerts(showSpinner = true) {
   const tbody = document.getElementById('alerts-tbody');
   if (!tbody) return;
-  tbody.innerHTML = loadingRow(9);
+  if (showSpinner || !tbody.children.length) {
+    tbody.innerHTML = loadingRow(9);
+  }
 
   const f = state.alertsFilters;
   const params = new URLSearchParams({
@@ -374,7 +396,9 @@ async function fetchAndRenderAlerts() {
     renderPagination(data);
     updateSortHeaders();
   } catch (e) {
-    tbody.innerHTML = errorRow(9, e.message);
+    if (showSpinner || !tbody.children.length) {
+      tbody.innerHTML = errorRow(9, e.message);
+    }
   }
 }
 
@@ -1004,6 +1028,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Start on dashboard
   navigate('dashboard');
+
+  // Start real-time live polling for Suricata alert updates
+  startLivePolling();
 });
 
 function debounce(fn, ms) {
@@ -1041,3 +1068,50 @@ function initCursorGlow() {
     });
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REAL-TIME LIVE POLLING
+// ─────────────────────────────────────────────────────────────────────────────
+// Automatically checks for new Suricata alerts every 3 seconds while
+// viewing the dashboard or alert data, updating counts, charts, and tables
+// without requiring manual browser reloads.
+function startLivePolling() {
+  if (state.pollTimer) {
+    clearInterval(state.pollTimer);
+    state.pollTimer = null;
+  }
+  state.pollTimer = setInterval(pollLiveUpdates, 3000);
+}
+
+async function pollLiveUpdates() {
+  // Guard against overlapping requests if network/server is slow
+  if (state.isPolling) return;
+  state.isPolling = true;
+
+  try {
+    const stats = await apiFetch('/api/stats');
+
+    // Detect if alert total has changed
+    const hasChanged = state.lastTotalAlerts !== null && stats.total_alerts !== state.lastTotalAlerts;
+    state.lastTotalAlerts = stats.total_alerts;
+
+    // Update stat cards (smooth cubic ease-out animation only runs if values changed)
+    renderStatCards(stats);
+
+    // If new alerts were written by Suricata, refresh active views seamlessly
+    if (hasChanged) {
+      if (state.currentSection === 'dashboard') {
+        loadRecentAlerts(false);
+        refreshDashboardCharts();
+      } else if (state.currentSection === 'alerts') {
+        fetchAndRenderAlerts(false);
+      }
+    }
+  } catch (err) {
+    // Non-fatal: if connection drops momentarily, keep polling smoothly
+    console.debug('Live polling tick:', err);
+  } finally {
+    state.isPolling = false;
+  }
+}
+

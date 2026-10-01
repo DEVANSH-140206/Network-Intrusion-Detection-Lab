@@ -16,6 +16,21 @@ logger = logging.getLogger(__name__)
 api = Blueprint("api", __name__, url_prefix="/api")
 
 
+@api.before_request
+def check_for_live_updates():
+    """
+    Check if eve.json on disk has been updated before serving any API request.
+    When DATA_MODE=suricata, this detects newly generated alerts in real-time
+    without needing a Flask restart. Fast and lightweight: only performs an
+    os.stat check, avoiding file re-parsing when no changes occurred.
+    """
+    cfg = current_app.config
+    if cfg.get("DATA_MODE", "").lower() == "suricata":
+        eve_path = cfg.get("SURICATA_EVE_PATH")
+        if eve_path:
+            store.refresh_if_modified(eve_path)
+
+
 # ─── Health ────────────────────────────────────────────────────────────────────
 
 @api.route("/health")

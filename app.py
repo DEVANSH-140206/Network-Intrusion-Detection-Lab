@@ -34,11 +34,11 @@ def create_app() -> Flask:
     )
 
     # ── Configuration ─────────────────────────────────────────────────────────
-    app.config["SECRET_KEY"] = Config.SECRET_KEY
-    app.config["DATA_MODE"] = Config.DATA_MODE
-    app.config["SURICATA_EVE_PATH"] = Config.SURICATA_EVE_PATH
-    app.config["SURICATA_BIN"] = Config.SURICATA_BIN
-    app.config["SURICATA_CONFIG"] = Config.SURICATA_CONFIG
+    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", Config.SECRET_KEY)
+    app.config["DATA_MODE"] = os.getenv("DATA_MODE", Config.DATA_MODE).lower()
+    app.config["SURICATA_EVE_PATH"] = os.getenv("SURICATA_EVE_PATH", Config.SURICATA_EVE_PATH)
+    app.config["SURICATA_BIN"] = os.getenv("SURICATA_BIN", Config.SURICATA_BIN)
+    app.config["SURICATA_CONFIG"] = os.getenv("SURICATA_CONFIG", Config.SURICATA_CONFIG)
     app.config["UPLOAD_FOLDER"] = Config.UPLOAD_FOLDER
     app.config["MAX_PCAP_SIZE_MB"] = Config.MAX_PCAP_SIZE_MB
     app.config["SURICATA_RULES_PATH"] = os.getenv("SURICATA_RULES_PATH", "")
@@ -47,8 +47,12 @@ def create_app() -> Flask:
     os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
     # ── Load alert data ───────────────────────────────────────────────────────
-    eve_path = Config.active_eve_path()
-    logger.info("DATA_MODE=%s  EVE_PATH=%s", Config.DATA_MODE, eve_path or "(none)")
+    if app.config["DATA_MODE"] == "demo":
+        eve_path = Config.DEMO_EVE_PATH
+    else:
+        eve_path = app.config["SURICATA_EVE_PATH"]
+
+    logger.info("DATA_MODE=%s  EVE_PATH=%s", app.config["DATA_MODE"], eve_path or "(none)")
     store.load(eve_path)
     meta = store.get_parse_meta()
     logger.info(
@@ -68,8 +72,8 @@ def create_app() -> Flask:
     def index():
         return render_template(
             "index.html",
-            data_mode=Config.DATA_MODE,
-            is_demo=Config.is_demo(),
+            data_mode=app.config["DATA_MODE"],
+            is_demo=(app.config["DATA_MODE"] == "demo"),
         )
 
     # Catch-all so direct URL navigation still serves the SPA
@@ -81,8 +85,8 @@ def create_app() -> Flask:
             return send_from_directory(app.static_folder, path)
         return render_template(
             "index.html",
-            data_mode=Config.DATA_MODE,
-            is_demo=Config.is_demo(),
+            data_mode=app.config["DATA_MODE"],
+            is_demo=(app.config["DATA_MODE"] == "demo"),
         )
 
     return app

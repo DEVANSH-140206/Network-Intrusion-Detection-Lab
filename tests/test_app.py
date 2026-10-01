@@ -328,3 +328,99 @@ class TestPcapList:
         data = r.get_json()
         assert "files" in data
         assert isinstance(data["files"], list)
+
+
+class TestLiveSuricataReload:
+    """Tests for live Suricata eve.json monitoring and automatic reload."""
+
+    def _make_alert(self, sid: int, sig: str = "Test Attack"):
+        return {
+            "timestamp": "2026-10-01T10:00:00.000+0530",
+            "event_type": "alert",
+            "src_ip": "192.168.56.101",
+            "dest_ip": "192.168.56.110",
+            "src_port": 50000 + sid,
+            "dest_port": 80,
+            "proto": "TCP",
+            "alert": {
+                "signature": sig,
+                "category": "Attempted Information Leak",
+                "severity": 2,
+                "signature_id": sid,
+                "gid": 1,
+            },
+        }
+
+    def test_store_refresh_if_modified(self):
+        fd, path = tempfile.mkstemp(suffix=".json")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps(self._make_alert(1001, "First Alert")) + "\n")
+
+            store.load(path)
+            stats1 = store.get_stats()
+            assert stats1["total_alerts"] == 1
+
+            # No modification -> refresh_if_modified should return False
+            assert store.refresh_if_modified(path) is False
+            assert store.get_stats()["total_alerts"] == 1
+
+            # Append second alert to file
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(self._make_alert(1002, "Second Alert")) + "\n")
+
+            # Modification detected -> refresh_if_modified should return True
+            assert store.refresh_if_modified(path) is True
+            stats2 = store.get_stats()
+            assert stats2["total_alerts"] == 2
+
+            alerts = store.get_alerts()["alerts"]
+            sigs = [a["signature"] for a in alerts]
+            assert "First Alert" in sigs
+            assert "Second Alert" in sigs
+        finally:
+            os.close(fd)
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_api_live_reload_in_suricata_mode(self):
+        fd, path = tempfile.mkstemp(suffix=".json")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps(self._make_alert(2001, "Initial Recon")) + "\n")
+
+            # Create test app in suricata mode pointing to temp file
+            os.environ["DATA_MODE"] = "suricata"
+            os.environ["SURICATA_EVE_PATH"] = path
+
+            app = create_app()
+            app.config["TESTING"] = True
+            app.config["DATA_MODE"] = "suricata"
+            app.config["SURICATA_EVE_PATH"] = path
+
+            client = app.test_client()
+
+            # First check: 1 alert
+            res1 = client.get("/api/stats").get_json()
+            assert res1["total_alerts"] == 1
+            assert res1["data_mode"] == "suricata"
+
+            # Suricata writes a new alert (e.g. from nmap scan)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(self._make_alert(2002, "Nmap SYN Scan Detected")) + "\n")
+
+            # Next API poll automatically detects the change without restarting Flask!
+            res2 = client.get("/api/stats").get_json()
+            assert res2["total_alerts"] == 2
+
+            # Alerts endpoint also shows the newly arrived alert
+            alerts_res = client.get("/api/alerts").get_json()
+            assert alerts_res["total"] == 2
+            assert any("Nmap SYN Scan" in a["signature"] for a in alerts_res["alerts"])
+        finally:
+            # Restore environment to demo
+            os.environ["DATA_MODE"] = "demo"
+            os.close(fd)
+            if os.path.exists(path):
+                os.unlink(path)
+
