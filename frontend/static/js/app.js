@@ -1098,14 +1098,20 @@ async function pollLiveUpdates() {
     // Update stat cards (smooth cubic ease-out animation only runs if values changed)
     renderStatCards(stats);
 
-    // If new alerts were written by Suricata, refresh active views seamlessly
-    if (hasChanged) {
-      if (state.currentSection === 'dashboard') {
-        loadRecentAlerts(false);
+    if (state.currentSection === 'dashboard') {
+      // Always refresh Recent Alerts on every poll tick while on the dashboard.
+      // This ensures new Suricata events appear immediately even if a previous
+      // refresh silently failed (showSpinner=false swallows errors), or if the
+      // count update was already captured before the table had a chance to render.
+      loadRecentAlerts(false);
+
+      // Charts are more expensive — only redraw when the alert count changed.
+      if (hasChanged) {
         refreshDashboardCharts();
-      } else if (state.currentSection === 'alerts') {
-        fetchAndRenderAlerts(false);
       }
+    } else if (state.currentSection === 'alerts' && hasChanged) {
+      // Alerts page: refresh on count change (preserves pagination/filter state)
+      fetchAndRenderAlerts(false);
     }
   } catch (err) {
     // Non-fatal: if connection drops momentarily, keep polling smoothly
