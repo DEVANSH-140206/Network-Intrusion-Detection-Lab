@@ -1,600 +1,1820 @@
-# NIDS Lab — Final Demo Runbook
+# Network Intrusion Detection Lab (NIDS Lab)
 
-## Network Intrusion Detection Lab
+A small-scale simulation of a **passive Enterprise Network Intrusion Detection System (NIDS)** operating as part of a **Security Operations Center (SOC)** monitoring workflow.
 
-A small-scale simulation of a passive **Enterprise Network Intrusion Detection System (NIDS)** operating as part of a **Security Operations Center (SOC)**.
+The project demonstrates an end-to-end cybersecurity monitoring pipeline in an isolated virtual laboratory:
+
+**Controlled Attack → Network Traffic → Suricata NIDS → eve.json → Flask Backend → SOC-Style Dashboard**
+
+The lab uses Kali Linux as the simulated attacker and monitoring host, Metasploitable2 as the intentionally vulnerable victim, Suricata as the passive NIDS sensor, and a Python/Flask dashboard for alert visualization.
+
+> **Important:** This project is an educational simulation. It is not a production enterprise SOC, IPS, SIEM, or automated prevention system.
 
 ---
 
-## 1. LAB ARCHITECTURE
+# Table of Contents
 
+1. [Project Overview](#project-overview)
+2. [Project Objective](#project-objective)
+3. [Real-World Concept](#real-world-concept)
+4. [Architecture](#architecture)
+5. [Data Flow](#data-flow)
+6. [Component Roles](#component-roles)
+7. [Technology Stack](#technology-stack)
+8. [Lab Network Configuration](#lab-network-configuration)
+9. [Detection Rules](#detection-rules)
+10. [Quick Demo Runbook](#quick-demo-runbook)
+11. [Complete Setup](#complete-setup)
+12. [Suricata Configuration](#suricata-configuration)
+13. [Flask Dashboard Setup](#flask-dashboard-setup)
+14. [Attack and Detection Testing](#attack-and-detection-testing)
+15. [API Reference](#api-reference)
+16. [Live Dashboard Behavior](#live-dashboard-behavior)
+17. [Validation and Testing](#validation-and-testing)
+18. [Repository Structure](#repository-structure)
+19. [Troubleshooting](#troubleshooting)
+20. [Final Presentation Checklist](#final-presentation-checklist)
+21. [Post-Demo Cleanup](#post-demo-cleanup)
+22. [Limitations](#limitations)
+23. [Future Improvements](#future-improvements)
+24. [Learning Outcomes](#learning-outcomes)
+25. [Team Responsibilities](#team-responsibilities)
+26. [Security and Ethical Use](#security-and-ethical-use)
+
+---
+
+# Project Overview
+
+The **Network Intrusion Detection Lab** is a controlled virtual cybersecurity laboratory designed to demonstrate how a basic passive NIDS workflow operates.
+
+The project simulates the following environment:
+
+```text
+                    Controlled Attack Traffic
+                             |
+                             v
+                    +----------------+
+                    |   Kali Linux   |
+                    |    Attacker    |
+                    | Nmap / Hydra   |
+                    +-------+--------+
+                            |
+                            | Host-Only Network
+                            | 192.168.56.0/24
+                            v
+                  +-----------------------+
+                  |    Metasploitable2    |
+                  |  Intentionally         |
+                  |  Vulnerable Victim     |
+                  +-----------+-----------+
+                              |
+                              | Network Traffic
+                              v
+                  +-----------------------+
+                  |   Suricata 8.0.7      |
+                  |   Passive NIDS Sensor  |
+                  +-----------+-----------+
+                              |
+                              | Alert Events
+                              v
+                  +-----------------------+
+                  |      eve.json          |
+                  | /var/log/suricata/     |
+                  +-----------+-----------+
+                              |
+                              | Parsed by Flask
+                              v
+                  +-----------------------+
+                  |    Flask Backend       |
+                  | Python REST API        |
+                  +-----------+-----------+
+                              |
+                              | HTTP / JSON
+                              v
+                  +-----------------------+
+                  | SOC-Style Dashboard    |
+                  | Near-real-time polling |
+                  +-----------------------+
 ```
-Windows Host
-    ↓
-Browser  (http://192.168.56.101:5000)
-    ↓
-Flask Dashboard
-    ↓
-Kali Linux  (192.168.56.101)
-    ├── Suricata  (IDS — listens on eth1)
-    ├── Nmap      (TCP SYN reconnaissance)
-    ├── Hydra     (SSH brute-force simulation)
-    └── Flask     (SOC dashboard web server)
-    ↓
-Host-Only Network  (192.168.56.0/24)
-    ↓
-Metasploitable2  (<METASPLOITABLE-IP>)
+
+---
+
+# Project Objective
+
+The main objectives of the project are:
+
+* Simulate a small enterprise-style network monitoring environment.
+* Generate controlled reconnaissance and brute-force traffic.
+* Detect suspicious traffic using Suricata.
+* Generate structured alert records through `eve.json`.
+* Parse Suricata alerts using a Python backend.
+* Expose alert information through REST APIs.
+* Display alerts and network information through a SOC-style dashboard.
+* Demonstrate near-real-time dashboard updates.
+* Provide a reproducible cybersecurity laboratory for academic evaluation.
+
+---
+
+# Real-World Concept
+
+The project represents a simplified version of a **Network Intrusion Detection System (NIDS)** used in security monitoring environments.
+
+In a real organization:
+
+```text
+Network Traffic
+       |
+       v
+NIDS Sensor
+       |
+       v
+Detection Rules
+       |
+       v
+Security Events
+       |
+       v
+SOC / SIEM
+       |
+       v
+Security Analyst
 ```
 
-### Component Roles
+Our project implements a smaller version of this workflow:
 
-| Component | Role |
-|---|---|
-| **Kali Linux** | Attacker/IDS machine — runs Suricata and the Flask dashboard |
-| **Metasploitable2** | Intentionally vulnerable victim — generates real target traffic |
-| **Suricata** | Passive NIDS — inspects eth1, writes structured events to eve.json |
-| **Nmap** | Generates controlled TCP SYN reconnaissance traffic |
-| **Hydra** | Simulates SSH brute-force login attempts |
-| **Flask** | SOC-style web dashboard that reads and visualizes eve.json |
-| **eve.json** | Suricata’s structured JSON alert log — the live data feed for the dashboard |
-| **Wireshark** | Optional packet-level evidence — captures raw traffic on eth1 |
-| **VirtualBox Host-Only Network** | Isolated lab network — keeps all traffic inside the lab environment |
+```text
+Kali Attack Traffic
+       |
+       v
+Suricata NIDS
+       |
+       v
+eve.json
+       |
+       v
+Flask Backend
+       |
+       v
+SOC-Style Dashboard
+```
 
----
+### What the project IS
 
-## 2. IMPORTANT IP ADDRESSES
+* Passive NIDS simulation
+* Controlled network monitoring laboratory
+* Signature-based detection demonstration
+* Suricata-based alert generation
+* Flask-based monitoring dashboard
+* SOC-style visualization
 
-| Machine | IP Address |
-|---|---|
-| Kali Linux (attacker + dashboard host) | `192.168.56.101` |
-| Kali capture interface | `eth1` |
-| Metasploitable2 (victim) | **Must be discovered before the demo — see Step 4** |
-| SOC Dashboard URL | `http://192.168.56.101:5000` |
+### What the project IS NOT
 
-> **IMPORTANT:** Do NOT assume the Metasploitable2 IP is any fixed value.
-> It must be discovered with `nmap -sn 192.168.56.0/24` before every demo.
-> Wherever you see `<METASPLOITABLE-IP>` in this runbook, substitute the actual IP you find.
-
----
-
-## 3. BEFORE STARTING THE DEMO
-
-1. Start **Kali Linux** in VirtualBox.
-2. Start **Metasploitable2** in VirtualBox.
-3. Confirm both VMs are connected to the same **Host-Only** network (`192.168.56.0/24`).
-4. Do **not** change the network adapter settings during the demo.
-5. Open a browser on the **Windows host** — it will be used for the dashboard.
+* IPS
+* Packet-blocking system
+* Production enterprise SOC
+* SIEM replacement
+* AI/ML detection engine
+* Automated response system
+* Full enterprise NDR platform
 
 ---
 
-## 4. TERMINAL 1 — DISCOVER METASPLOITABLE2
+# Architecture
 
-Open a terminal on Kali and run:
+```text
+                         WINDOWS HOST
+                    Browser / Project Demo
+                              |
+                              | HTTP
+                              v
++------------------------------------------------------------------+
+|                         KALI LINUX VM                            |
+|                         192.168.56.101                           |
+|                                                                  |
+|  +----------------+       +----------------------+               |
+|  | Nmap / Hydra   | ----> | eth1 Host-Only       |               |
+|  | Simulated      |       | Interface            |               |
+|  | Attacker       |       +----------+-----------+               |
+|  +----------------+                  |                           |
+|                                      |                           |
+|                                      v                           |
+|                           +--------------------+                 |
+|                           | Suricata 8.0.7     |                 |
+|                           | Passive NIDS       |                 |
+|                           +---------+----------+                 |
+|                                     |                            |
+|                                     v                            |
+|                           /var/log/suricata/                     |
+|                                  eve.json                        |
+|                                     |                            |
+|                                     v                            |
+|                           +--------------------+                 |
+|                           | Flask Backend      |                 |
+|                           | parser/store/API   |                 |
+|                           +---------+----------+                 |
+|                                     |                            |
+|                                     v                            |
+|                           +--------------------+                 |
+|                           | Web Dashboard      |                 |
+|                           | SOC-style UI       |                 |
+|                           +--------------------+                 |
+|                                                                  |
++------------------------------+-----------------------------------+
+                               |
+                               | Host-Only Network
+                               | 192.168.56.0/24
+                               v
+                    +-------------------------+
+                    |    Metasploitable2      |
+                    |    192.168.56.102        |
+                    |    Vulnerable Victim    |
+                    +-------------------------+
+```
+
+---
+
+# Data Flow
+
+The complete detection pipeline is:
+
+```text
+Attack
+  ↓
+Network Traffic
+  ↓
+Suricata
+  ↓
+Detection Rule Match
+  ↓
+eve.json
+  ↓
+Flask Backend
+  ↓
+REST API
+  ↓
+Dashboard Polling
+  ↓
+Alert Display
+```
+
+### Step-by-step
+
+1. Kali generates controlled attack traffic.
+2. Traffic travels through the isolated Host-Only network.
+3. Suricata monitors the traffic on `eth1`.
+4. Active Suricata rules evaluate matching packets.
+5. Triggered alerts are written to `eve.json`.
+6. Flask reads and parses the alert data.
+7. Flask exposes the information through REST APIs.
+8. The frontend periodically polls the APIs.
+9. The dashboard updates when new alert data becomes available.
+
+---
+
+# Component Roles
+
+| Component                    | Role                                             |
+| ---------------------------- | ------------------------------------------------ |
+| Kali Linux                   | Simulated attacker, Suricata host, Flask host    |
+| Metasploitable2              | Intentionally vulnerable victim machine          |
+| VirtualBox Host-Only Network | Isolated laboratory network                      |
+| Suricata                     | Passive NIDS sensor                              |
+| `eve.json`                   | Structured Suricata event/alert log              |
+| Flask                        | Backend API and alert processing                 |
+| Dashboard                    | SOC-style monitoring interface                   |
+| Nmap                         | Controlled reconnaissance traffic generation     |
+| Hydra                        | Controlled SSH brute-force traffic generation    |
+| Wireshark                    | Optional packet-level traffic analysis           |
+| Git/GitHub                   | Source-code management and project documentation |
+
+---
+
+# Technology Stack
+
+### Operating Systems
+
+* Kali Linux
+* Metasploitable2
+* Windows host for VirtualBox/browser
+
+### Cybersecurity Tools
+
+* Suricata 8.0.7
+* Nmap
+* Hydra
+* Wireshark
+
+### Development
+
+* Python
+* Flask
+* HTML
+* CSS
+* JavaScript
+* REST API
+* JSON
+
+### Infrastructure
+
+* Oracle VirtualBox
+* Host-Only networking
+* Git
+* GitHub
+
+---
+
+# Lab Network Configuration
+
+The project uses an isolated VirtualBox Host-Only network.
+
+| Parameter              | Value                                |
+| ---------------------- | ------------------------------------ |
+| Network Type           | VirtualBox Host-Only                 |
+| Subnet                 | `192.168.56.0/24`                    |
+| Kali Host-Only IP      | `192.168.56.101`                     |
+| Kali Capture Interface | `eth1`                               |
+| Metasploitable2 IP     | `192.168.56.102`                     |
+| Suricata Interface     | `eth1`                               |
+| Dashboard              | `http://192.168.56.101:5000`         |
+| Suricata Config        | `/etc/suricata/suricata.yaml`        |
+| Suricata Rules         | `/etc/suricata/rules/nids-lab.rules` |
+| EVE Log                | `/var/log/suricata/eve.json`         |
+
+> **Do not change the Host-Only network configuration during the final demonstration unless there is a specific networking problem.**
+
+---
+
+# Detection Rules
+
+The project currently uses two custom Suricata rules.
+
+## Rule 1 — Nmap Port Scan
+
+```suricata
+alert tcp any any -> 192.168.56.102 any (msg:"ET SCAN Possible Nmap Port Scan"; flags:S; flow:stateless; detection_filter:track by_src,count 20,seconds 3; classtype:network-scan; sid:1000001; rev:2;)
+```
+
+### Purpose
+
+Detect rapid TCP SYN reconnaissance against the Metasploitable2 victim.
+
+### Important parameters
+
+| Parameter        | Value                             |
+| ---------------- | --------------------------------- |
+| SID              | `1000001`                         |
+| Message          | `ET SCAN Possible Nmap Port Scan` |
+| Protocol         | TCP                               |
+| Target           | `192.168.56.102`                  |
+| Flag             | SYN                               |
+| Detection Filter | 20 packets / 3 seconds            |
+| Classification   | `network-scan`                    |
+| Revision         | `2`                               |
+
+The rule is intentionally scoped to the Metasploitable2 IP to reduce unrelated alert noise.
+
+### Test
 
 ```bash
-nmap -sn 192.168.56.0/24
+sudo nmap -Pn -sS -p 1-100 192.168.56.102
 ```
-
-**What to look for:**
-- `192.168.56.101` is Kali itself — skip it.
-- The second live host (typically showing many open ports or "Metasploitable" in its hostname) is the victim.
-- Note that IP — it is your `<METASPLOITABLE-IP>` for the rest of the demo.
 
 ---
 
-## 5. VERIFY KALI IDS INTERFACE
+## Rule 2 — SSH Brute Force
+
+```suricata
+alert tcp any any -> $HOME_NET 22 (msg:"NIDS LAB - SSH Brute Force Activity"; flags:S; flow:stateless; detection_filter:track by_src,count 5,seconds 10; classtype:attempted-admin; sid:1000002; rev:1;)
+```
+
+### Purpose
+
+Detect repeated TCP connection attempts toward SSH.
+
+### Important parameters
+
+| Parameter        | Value                                 |
+| ---------------- | ------------------------------------- |
+| SID              | `1000002`                             |
+| Message          | `NIDS LAB - SSH Brute Force Activity` |
+| Protocol         | TCP                                   |
+| Destination Port | `22`                                  |
+| Flag             | SYN                                   |
+| Detection Filter | 5 packets / 10 seconds                |
+| Classification   | `attempted-admin`                     |
+| Revision         | `1`                                   |
+
+### Test
+
+```bash
+hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://192.168.56.102
+```
+
+> Use this command only against the intentionally vulnerable Metasploitable2 VM in the isolated laboratory.
+
+---
+
+# Quick Demo Runbook
+
+This is the section to follow during the actual college presentation.
+
+## Demo Requirements
+
+Before starting:
+
+* Kali Linux VM is running.
+* Metasploitable2 VM is running.
+* Both machines are connected to the same Host-Only network.
+* Kali has `192.168.56.101`.
+* Metasploitable2 has `192.168.56.102`.
+* Suricata is installed.
+* The project repository exists at `~/Network-Intrusion-Detection-Lab`.
+* Python virtual environment exists.
+* Dashboard dependencies are installed.
+
+---
+
+## Step 1 — Verify Kali Interface
+
+### Run in Kali Terminal 1
 
 ```bash
 ip addr show eth1
 ```
 
-**Expected output (excerpt):**
-```
+Expected:
+
+```text
 inet 192.168.56.101/24
 ```
 
-`eth1` is the Host-Only laboratory interface that Suricata uses to capture traffic.
-If you do not see `192.168.56.101` on `eth1`, stop and fix the VirtualBox network configuration before continuing.
+---
+
+## Step 2 — Verify Metasploitable2
+
+### Run in Kali Terminal 1
+
+```bash
+ping -c 2 192.168.56.102
+```
+
+Expected:
+
+```text
+2 packets transmitted, 2 received, 0% packet loss
+```
+
+If this fails, **do not start the attack demonstration**. Fix the Host-Only network first.
 
 ---
 
-## 6. OPTIONAL CLEAN START
+## Step 3 — Start Suricata
 
-If Suricata or Flask from a previous session are still running, stop them first:
+### Run in Kali Terminal 1
+
+```bash
+sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D
+```
+
+Verify:
+
+```bash
+ps aux | grep '[s]uricata'
+```
+
+A Suricata process should be displayed.
+
+---
+
+## Step 4 — Start Flask Dashboard
+
+### Run in Kali Terminal 2
+
+```bash
+cd ~/Network-Intrusion-Detection-Lab
+source venv/bin/activate
+
+DATA_MODE=suricata \
+SURICATA_EVE_PATH=/var/log/suricata/eve.json \
+SURICATA_RULES_PATH=/etc/suricata/rules/nids-lab.rules \
+FLASK_HOST=0.0.0.0 \
+python3 app.py
+```
+
+Keep this terminal running.
+
+The important settings are:
+
+```text
+DATA_MODE=suricata
+SURICATA_EVE_PATH=/var/log/suricata/eve.json
+SURICATA_RULES_PATH=/etc/suricata/rules/nids-lab.rules
+FLASK_HOST=0.0.0.0
+```
+
+---
+
+## Step 5 — Open Dashboard
+
+Open a browser on the Windows host or Kali:
+
+```text
+http://192.168.56.101:5000
+```
+
+Confirm that the dashboard loads.
+
+The dashboard should be connected to the Suricata data source.
+
+---
+
+# Step 6 — Demonstrate Nmap Detection
+
+### Run in Kali Terminal 3
+
+```bash
+sudo nmap -Pn -sS -p 1-100 192.168.56.102
+```
+
+This generates rapid TCP SYN traffic toward the Metasploitable2 VM.
+
+The current rule uses:
+
+```text
+20 matching SYN packets within 3 seconds
+```
+
+A 100-port scan provides enough traffic to exercise the detection threshold much more reliably than a very small port scan.
+
+### Expected dashboard alert
+
+Look at the **Recent Alerts** section.
+
+Expected signature:
+
+```text
+ET SCAN Possible Nmap Port Scan
+```
+
+Expected SID:
+
+```text
+1000001
+```
+
+Expected source:
+
+```text
+192.168.56.101
+```
+
+Expected destination:
+
+```text
+192.168.56.102
+```
+
+---
+
+# Step 7 — Demonstrate SSH Brute-Force Detection
+
+### Run in Kali Terminal 3
+
+```bash
+hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://192.168.56.102
+```
+
+This is a controlled brute-force simulation against the intentionally vulnerable Metasploitable2 VM.
+
+Once sufficient traffic has been generated, stop Hydra with:
+
+```text
+Ctrl+C
+```
+
+### Expected dashboard alert
+
+Expected signature:
+
+```text
+NIDS LAB - SSH Brute Force Activity
+```
+
+Expected SID:
+
+```text
+1000002
+```
+
+Expected source:
+
+```text
+192.168.56.101
+```
+
+Expected destination:
+
+```text
+192.168.56.102
+```
+
+Expected destination port:
+
+```text
+22
+```
+
+---
+
+# Step 8 — Show Raw Suricata Evidence
+
+### Run in Kali Terminal 3
+
+```bash
+sudo tail -n 5 /var/log/suricata/fast.log
+```
+
+This displays human-readable Suricata alerts.
+
+Then:
+
+```bash
+sudo tail -n 5 /var/log/suricata/eve.json
+```
+
+This displays structured JSON events.
+
+Look for:
+
+```text
+"event_type":"alert"
+```
+
+and the corresponding signatures/SIDs.
+
+This is useful during the presentation because it proves that the dashboard is ultimately backed by Suricata-generated event data.
+
+---
+
+# Step 9 — Verify the Backend API
+
+### Check statistics
+
+```bash
+curl -s "http://127.0.0.1:5000/api/stats" | python3 -m json.tool
+```
+
+### Check latest alerts
+
+```bash
+curl -s "http://127.0.0.1:5000/api/alerts?per_page=5&sort_by=timestamp&sort_order=desc" | python3 -m json.tool
+```
+
+The latest alerts should correspond to the traffic generated during the demonstration.
+
+---
+
+# Step 10 — Demonstrate Dashboard Investigation
+
+Use the browser to demonstrate the available dashboard views.
+
+Depending on the current UI:
+
+### Alerts
+
+Show:
+
+* Recent alerts
+* Severity
+* Protocol
+* Source IP
+* Destination IP
+* Alert details
+* Raw JSON where available
+
+### Traffic
+
+Show:
+
+* Source IP information
+* Destination information
+* Protocol information
+* Flow information
+
+### Rules
+
+Show the detection rules currently loaded by the application.
+
+### System Status
+
+Show the status of:
+
+* Flask backend
+* Suricata data source
+* EVE log feed
+
+---
+
+# Live Dashboard Behavior
+
+The dashboard does not require a manual browser refresh for every alert.
+
+The frontend periodically polls the backend API.
+
+The current implementation uses approximately **3-second polling**.
+
+The workflow is:
+
+```text
+Suricata writes new alert
+        ↓
+eve.json changes
+        ↓
+Flask detects updated file
+        ↓
+New alert is parsed
+        ↓
+Frontend polling request
+        ↓
+Dashboard updates
+```
+
+This should be described as:
+
+> **Near-real-time polling/live dashboard updates**
+
+It should not be described as an absolute real-time streaming system.
+
+The project does not use WebSockets or Server-Sent Events for this functionality.
+
+---
+
+# Complete Setup
+
+This section is for rebuilding the environment, not for the final presentation if the environment is already working.
+
+---
+
+## 1. Prerequisites
+
+Required:
+
+* VirtualBox
+* Kali Linux
+* Metasploitable2
+* Python 3
+* Git
+* Suricata
+* Nmap
+* Hydra
+
+The host machine must support hardware virtualization.
+
+---
+
+# 2. VirtualBox Network
+
+Use a **Host-Only** network.
+
+The intended topology is:
+
+```text
+Windows Host
+     |
+VirtualBox
+     |
+     +----------------------------+
+     | Host-Only Network           |
+     | 192.168.56.0/24             |
+     +--------------+-------------+
+                    |
+            +-------+-------+
+            |               |
+            v               v
+          Kali       Metasploitable2
+      192.168.56.101   192.168.56.102
+```
+
+Do not expose the vulnerable Metasploitable2 VM directly to the public Internet.
+
+---
+
+# 3. Verify Kali Network
+
+```bash
+ip addr
+```
+
+Identify the Host-Only interface.
+
+For this project it is:
+
+```text
+eth1
+```
+
+Verify:
+
+```bash
+ip addr show eth1
+```
+
+Expected:
+
+```text
+192.168.56.101/24
+```
+
+If the interface exists but has no address:
+
+```bash
+sudo ip addr add 192.168.56.101/24 dev eth1
+sudo ip link set eth1 up
+```
+
+Then verify:
+
+```bash
+ip addr show eth1
+```
+
+---
+
+# 4. Verify Metasploitable2
+
+```bash
+ping -c 2 192.168.56.102
+```
+
+If the target is unreachable, check:
+
+* Both VMs are powered on.
+* Both are connected to the same Host-Only network.
+* Kali uses `eth1`.
+* The target IP is correct.
+
+---
+
+# 5. Install Suricata
+
+If Suricata is not already installed:
+
+```bash
+sudo apt update
+sudo apt install -y suricata
+```
+
+Verify:
+
+```bash
+suricata -V
+```
+
+The project was tested with:
+
+```text
+Suricata 8.0.7
+```
+
+---
+
+# 6. Repository Setup
+
+Clone the project:
+
+```bash
+cd ~
+git clone https://github.com/DEVANSH-140206/Network-Intrusion-Detection-Lab.git
+cd Network-Intrusion-Detection-Lab
+```
+
+---
+
+# 7. Python Virtual Environment
+
+Create the environment:
+
+```bash
+python3 -m venv venv
+```
+
+Activate it:
+
+```bash
+source venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+# 8. Environment Configuration
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+The live Suricata demonstration explicitly uses:
+
+```text
+DATA_MODE=suricata
+SURICATA_EVE_PATH=/var/log/suricata/eve.json
+SURICATA_RULES_PATH=/etc/suricata/rules/nids-lab.rules
+FLASK_HOST=0.0.0.0
+```
+
+For the final demo, the environment variables are passed directly when starting Flask:
+
+```bash
+DATA_MODE=suricata \
+SURICATA_EVE_PATH=/var/log/suricata/eve.json \
+SURICATA_RULES_PATH=/etc/suricata/rules/nids-lab.rules \
+FLASK_HOST=0.0.0.0 \
+python3 app.py
+```
+
+This is the preferred final demonstration command.
+
+---
+
+# Suricata Configuration
+
+The active configuration is located at:
+
+```text
+/etc/suricata/suricata.yaml
+```
+
+The project uses:
+
+```text
+eth1
+```
+
+as the Suricata capture interface.
+
+The custom rules file is:
+
+```text
+/etc/suricata/rules/nids-lab.rules
+```
+
+The alert output is:
+
+```text
+/var/log/suricata/eve.json
+```
+
+Before running Suricata, configuration can be validated with:
+
+```bash
+sudo suricata -T -c /etc/suricata/suricata.yaml
+```
+
+A successful configuration test should indicate that the configuration loaded successfully.
+
+---
+
+# Running Suricata
+
+The current project demonstration command is:
+
+```bash
+sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D
+```
+
+Verify:
+
+```bash
+ps aux | grep '[s]uricata'
+```
+
+Check the EVE file:
+
+```bash
+sudo ls -lh /var/log/suricata/eve.json
+```
+
+---
+
+# Running the Dashboard
+
+From the project directory:
+
+```bash
+cd ~/Network-Intrusion-Detection-Lab
+```
+
+Activate the virtual environment:
+
+```bash
+source venv/bin/activate
+```
+
+Start Flask:
+
+```bash
+DATA_MODE=suricata \
+SURICATA_EVE_PATH=/var/log/suricata/eve.json \
+SURICATA_RULES_PATH=/etc/suricata/rules/nids-lab.rules \
+FLASK_HOST=0.0.0.0 \
+python3 app.py
+```
+
+Open:
+
+```text
+http://192.168.56.101:5000
+```
+
+Keep the Flask terminal running while using the dashboard.
+
+---
+
+# Attack and Detection Testing
+
+All attack commands in this documentation are intended only for the isolated laboratory.
+
+The project currently demonstrates two traffic patterns:
+
+1. TCP SYN reconnaissance using Nmap.
+2. Repeated SSH connection attempts using Hydra.
+
+---
+
+# Nmap Test
+
+Run:
+
+```bash
+sudo nmap -Pn -sS -p 1-100 192.168.56.102
+```
+
+This should generate a sufficiently large burst of TCP SYN packets to exercise SID `1000001`.
+
+Expected signature:
+
+```text
+ET SCAN Possible Nmap Port Scan
+```
+
+Expected SID:
+
+```text
+1000001
+```
+
+---
+
+# Hydra SSH Test
+
+Run:
+
+```bash
+hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://192.168.56.102
+```
+
+This generates repeated SSH connection attempts against the intentionally vulnerable Metasploitable2 machine.
+
+Expected signature:
+
+```text
+NIDS LAB - SSH Brute Force Activity
+```
+
+Expected SID:
+
+```text
+1000002
+```
+
+Stop Hydra when the required demonstration traffic has been generated:
+
+```text
+Ctrl+C
+```
+
+---
+
+# API Reference
+
+The Flask backend provides REST API endpoints for the dashboard.
+
+The exact available routes are implemented in:
+
+```text
+backend/routes.py
+```
+
+Common endpoints include:
+
+| Endpoint                | Method | Purpose                       |
+| ----------------------- | ------ | ----------------------------- |
+| `/api/health`           | GET    | Backend health                |
+| `/api/stats`            | GET    | Alert statistics              |
+| `/api/alerts`           | GET    | Alert listing                 |
+| `/api/alerts/<id>`      | GET    | Individual alert              |
+| `/api/timeline`         | GET    | Alert timeline                |
+| `/api/top-sources`      | GET    | Top source IPs                |
+| `/api/top-destinations` | GET    | Top destination IPs           |
+| `/api/protocols`        | GET    | Protocol statistics           |
+| `/api/categories`       | GET    | Alert category statistics     |
+| `/api/top-dest-ports`   | GET    | Targeted destination ports    |
+| `/api/flow-pairs`       | GET    | Source/destination flow pairs |
+| `/api/filter-options`   | GET    | Dashboard filter data         |
+| `/api/rules`            | GET    | Loaded detection rules        |
+| `/api/system-status`    | GET    | System component status       |
+| `/api/pcap/list`        | GET    | Available PCAP files          |
+| `/api/pcap/upload`      | POST   | PCAP upload                   |
+
+---
+
+## API Examples
+
+### Health
+
+```bash
+curl -s "http://127.0.0.1:5000/api/health" | python3 -m json.tool
+```
+
+### Statistics
+
+```bash
+curl -s "http://127.0.0.1:5000/api/stats" | python3 -m json.tool
+```
+
+### Latest alerts
+
+```bash
+curl -s "http://127.0.0.1:5000/api/alerts?per_page=5&sort_by=timestamp&sort_order=desc" | python3 -m json.tool
+```
+
+### Rules
+
+```bash
+curl -s "http://127.0.0.1:5000/api/rules" | python3 -m json.tool
+```
+
+### System status
+
+```bash
+curl -s "http://127.0.0.1:5000/api/system-status" | python3 -m json.tool
+```
+
+---
+
+# Validation and Testing
+
+The repository contains automated tests.
+
+Run:
+
+```bash
+cd ~/Network-Intrusion-Detection-Lab
+source venv/bin/activate
+pytest tests/test_app.py -v
+```
+
+The test suite covers areas including:
+
+* Alert parsing
+* Severity handling
+* Statistics
+* Filtering
+* Pagination
+* Timeline processing
+* Live file refresh
+* API routes
+* PCAP handling
+* Detection-rule parsing
+
+---
+
+# API Verification Script
+
+With Flask running:
+
+```bash
+python tests/verify_api.py
+```
+
+This provides an additional check that the live backend endpoints are responding correctly.
+
+---
+
+# Live Refresh Implementation
+
+The live-refresh functionality is implemented across the application.
+
+Important files include:
+
+```text
+backend/store.py
+backend/routes.py
+app.py
+frontend/static/js/app.js
+```
+
+The backend checks whether the Suricata EVE file has changed.
+
+When new alert records are appended:
+
+```text
+eve.json modified
+      ↓
+backend detects modification
+      ↓
+new records parsed
+      ↓
+store updated
+      ↓
+frontend polling request
+      ↓
+dashboard updated
+```
+
+This allows the dashboard to show new alerts without requiring a manual browser refresh.
+
+---
+
+# Repository Structure
+
+```text
+Network-Intrusion-Detection-Lab/
+│
+├── app.py
+├── config.py
+├── requirements.txt
+├── generate_demo_data.py
+├── .env.example
+├── .gitignore
+├── README.md
+│
+├── backend/
+│   ├── __init__.py
+│   ├── parser.py
+│   ├── pcap_handler.py
+│   ├── routes.py
+│   ├── rules.py
+│   └── store.py
+│
+├── frontend/
+│   ├── templates/
+│   │   └── index.html
+│   └── static/
+│       ├── css/
+│       │   └── style.css
+│       └── js/
+│           └── app.js
+│
+├── data/
+│   ├── demo/
+│   └── uploads/
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_app.py
+│   └── verify_api.py
+│
+├── attack/
+│   ├── README.MD
+│   └── commands.md
+│
+├── detection/
+│   ├── README.md
+│   └── notes.md
+│
+├── analysis/
+│   ├── README.md
+│   └── wireshark-notes.md
+│
+├── dashboard/
+│   ├── README.md
+│   └── design.md
+│
+└── docs/
+    ├── architecture.md
+    ├── methodology.md
+    ├── setup.md
+    ├── testing.md
+    └── week1-progress.md
+```
+
+---
+
+# Troubleshooting
+
+## Suricata is not running
+
+Check:
+
+```bash
+ps aux | grep '[s]uricata'
+```
+
+If it is not running:
+
+```bash
+sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D
+```
+
+---
+
+## Check Suricata configuration
+
+```bash
+sudo suricata -T -c /etc/suricata/suricata.yaml
+```
+
+---
+
+## Metasploitable2 is unreachable
+
+Check:
+
+```bash
+ping -c 2 192.168.56.102
+```
+
+Then check:
+
+```bash
+ip addr show eth1
+```
+
+Make sure Kali is using:
+
+```text
+192.168.56.101
+```
+
+and the two VMs are connected to the same Host-Only network.
+
+---
+
+## `eve.json` is not updating
+
+Check:
+
+```bash
+sudo ls -lh /var/log/suricata/eve.json
+```
+
+Then:
+
+```bash
+ps aux | grep '[s]uricata'
+```
+
+Confirm that Suricata is running on:
+
+```text
+eth1
+```
+
+You can also inspect:
+
+```bash
+sudo tail -n 10 /var/log/suricata/eve.json
+```
+
+---
+
+## Nmap does not trigger SID 1000001
+
+The current rule requires:
+
+```text
+20 matching SYN packets within 3 seconds
+```
+
+Use:
+
+```bash
+sudo nmap -Pn -sS -p 1-100 192.168.56.102
+```
+
+Do not rely on a very small port scan.
+
+---
+
+## Hydra does not trigger SID 1000002
+
+The current rule requires:
+
+```text
+5 matching SSH SYN attempts within 10 seconds
+```
+
+Use:
+
+```bash
+hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://192.168.56.102
+```
+
+Make sure the Metasploitable2 SSH service is reachable.
+
+---
+
+## Dashboard cannot be opened
+
+Check Flask:
+
+```bash
+curl -s "http://127.0.0.1:5000/api/health"
+```
+
+Check that Flask was started using:
+
+```text
+FLASK_HOST=0.0.0.0
+```
+
+Then open:
+
+```text
+http://192.168.56.101:5000
+```
+
+---
+
+## Port 5000 is already in use
+
+Check:
+
+```bash
+sudo lsof -i :5000
+```
+
+or:
+
+```bash
+ss -tulpn | grep 5000
+```
+
+Stop the previous Flask process if necessary.
+
+---
+
+# Final Presentation Checklist
+
+Before the presentation:
+
+* [ ] Kali VM is running.
+* [ ] Metasploitable2 VM is running.
+* [ ] Host-Only network is working.
+* [ ] Kali IP is `192.168.56.101`.
+* [ ] Metasploitable2 IP is `192.168.56.102`.
+* [ ] Kali capture interface is `eth1`.
+* [ ] Suricata is installed.
+* [ ] Suricata configuration has been validated.
+* [ ] Custom rules exist.
+* [ ] Python virtual environment exists.
+* [ ] Python dependencies are installed.
+* [ ] Dashboard starts successfully.
+* [ ] Browser can open `http://192.168.56.101:5000`.
+* [ ] Nmap test works.
+* [ ] Hydra test works.
+* [ ] Dashboard updates without manual refresh.
+* [ ] API responds.
+* [ ] `eve.json` receives alerts.
+* [ ] `fast.log` receives alerts.
+
+---
+
+# Recommended Live Presentation Sequence
+
+For the actual evaluation, use this order:
+
+```text
+1. Start VMs
+       ↓
+2. Verify Kali IP
+       ↓
+3. Ping Metasploitable2
+       ↓
+4. Start Suricata
+       ↓
+5. Start Flask
+       ↓
+6. Open Dashboard
+       ↓
+7. Explain architecture
+       ↓
+8. Run Nmap
+       ↓
+9. Show Nmap alert appearing
+       ↓
+10. Run Hydra
+       ↓
+11. Show SSH alert appearing
+       ↓
+12. Show eve.json / fast.log
+       ↓
+13. Show API
+       ↓
+14. Show dashboard investigation views
+       ↓
+15. Explain limitations/future work
+```
+
+---
+
+# Post-Demo Cleanup
+
+After the presentation, stop the services.
+
+## Stop Suricata
 
 ```bash
 sudo pkill suricata
 ```
 
+## Stop Flask
+
+If Flask is running in the foreground:
+
+```text
+Ctrl+C
+```
+
+Alternatively:
+
 ```bash
 pkill -f "python.*app.py"
 ```
 
-Verify both are stopped (no output = clean):
+Verify:
 
 ```bash
 ps aux | grep -E 'suricata|python.*app.py' | grep -v grep
 ```
 
----
-
-## 7. TERMINAL 1 — START SURICATA
+If a clean future demonstration is required, the generated logs can be cleared:
 
 ```bash
-sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D
+sudo truncate -s 0 /var/log/suricata/eve.json
+sudo truncate -s 0 /var/log/suricata/fast.log
 ```
 
-**Verify Suricata is running:**
+> Only clear the logs when you intentionally want a fresh demonstration. Do not clear them before collecting evidence required for evaluation.
+
+---
+
+# Limitations
+
+The current implementation has several intentional limitations.
+
+### 1. Passive IDS
+
+Suricata is used as a passive NIDS sensor.
+
+The project does not:
+
+* Block traffic
+* Drop packets
+* Automatically ban IP addresses
+* Operate as an IPS
+
+---
+
+### 2. Limited Detection Rules
+
+The project currently focuses on two controlled traffic patterns:
+
+* Nmap-style TCP SYN reconnaissance
+* SSH brute-force activity
+
+It is not intended to detect every possible attack.
+
+---
+
+### 3. Controlled Virtual Environment
+
+The system operates inside an isolated VirtualBox laboratory.
+
+It does not reproduce:
+
+* Large enterprise networks
+* Multiple production subnets
+* Distributed sensors
+* Enterprise SIEM infrastructure
+* Production-scale traffic volumes
+
+---
+
+### 4. Signature-Based Detection
+
+The current detection approach uses deterministic Suricata signatures and detection filters.
+
+The project does not currently implement:
+
+* Machine learning
+* AI-based detection
+* Behavioral anomaly detection
+* Automated threat intelligence correlation
+
+---
+
+### 5. Near-Real-Time Polling
+
+The dashboard uses periodic HTTP polling to retrieve updated data.
+
+It is therefore better described as:
+
+> **Near-real-time dashboard monitoring**
+
+rather than absolute real-time streaming.
+
+---
+
+### 6. Educational Project
+
+The system is intended for:
+
+* Academic demonstration
+* Cybersecurity learning
+* Controlled testing
+* Project evaluation
+
+It should not be treated as a production security platform.
+
+---
+
+# Future Improvements
+
+Possible future extensions include:
+
+* More Suricata detection signatures
+* Additional attack simulations
+* Improved alert correlation
+* Authentication and role-based dashboard access
+* Persistent database storage
+* PCAP-to-alert investigation workflows
+* Email or notification integration
+* Threat-intelligence enrichment
+* Centralized logging
+* Multi-sensor support
+* Enterprise-style SIEM integration
+* Automated incident-response workflows
+* Advanced anomaly detection
+
+These are future possibilities and are not claimed as currently implemented functionality.
+
+---
+
+# Learning Outcomes
+
+Through this project, the team gains practical exposure to:
+
+* Network security monitoring
+* NIDS architecture
+* Suricata configuration
+* Signature-based intrusion detection
+* TCP SYN reconnaissance
+* SSH brute-force traffic
+* Network traffic analysis
+* Wireshark
+* Linux administration
+* Python
+* Flask REST APIs
+* JSON event processing
+* Frontend dashboard development
+* VirtualBox networking
+* Git/GitHub
+* Cybersecurity testing methodology
+* SOC monitoring concepts
+
+---
+
+# Team Responsibilities
+
+The project team responsibilities are organized around the technical components of the system.
+
+| Member             | Project Focus                      | Responsibilities                                                      |
+| ------------------ | ---------------------------------- | --------------------------------------------------------------------- |
+| Devansh Chaubey    | Attack Simulation & Reconnaissance | Nmap reconnaissance, Hydra traffic generation, attack-side testing    |
+| Divija Srivastava  | Suricata NIDS & Detection          | Suricata configuration, detection rules, sensor configuration         |
+| Manya              | Victim Environment & Analysis      | Metasploitable2 environment, victim-side services, Wireshark analysis |
+| Anshika Srivastava | Dashboard & Backend                | Flask backend, alert processing, dashboard implementation             |
+| Sharat Chodhary    | Integration & Testing              | End-to-end testing, validation, integration, demonstration support    |
+
+---
+
+# Security and Ethical Use
+
+This project contains demonstrations of network reconnaissance and credential brute-force techniques.
+
+All such activities must be performed only:
+
+* On systems you own or are explicitly authorized to test.
+* Inside the isolated project laboratory.
+* Against the intentionally vulnerable Metasploitable2 target.
+
+The documented Nmap and Hydra commands are intended for the controlled VirtualBox laboratory only.
+
+Do **not** use these commands against:
+
+* Public websites
+* College infrastructure
+* Company systems
+* Other people's computers
+* Public IP addresses
+* Networks without explicit authorization
+
+Metasploitable2 is intentionally vulnerable and exists specifically for controlled security training.
+
+---
+
+# GitHub Usage
+
+The project source code and documentation are maintained in Git.
+
+Remote repository:
+
+```text
+https://github.com/DEVANSH-140206/Network-Intrusion-Detection-Lab
+```
+
+After making documentation or code changes:
 
 ```bash
-ps aux | grep suricata | grep -v grep
+git status
 ```
 
-**Expected:** A line containing `suricata` is visible.
-
-**What Suricata does:**
-- Reads network traffic from `eth1` in passive (IDS) mode.
-- Writes structured alert events to `/var/log/suricata/eve.json`.
-- Writes a fast human-readable log to `/var/log/suricata/fast.log`.
-
----
-
-## 8. TERMINAL 2 — START FLASK DASHBOARD
-
-Open a **second terminal** on Kali:
+Review the changes:
 
 ```bash
-cd ~/Network-Intrusion-Detection-Lab
+git diff
 ```
+
+Stage the changes:
 
 ```bash
-source venv/bin/activate
+git add .
 ```
+
+Commit:
 
 ```bash
-DATA_MODE=suricata SURICATA_EVE_PATH=/var/log/suricata/eve.json FLASK_HOST=0.0.0.0 python3 app.py
+git commit -m "Update project documentation"
 ```
 
-**What to expect:**
-```
-Starting NIDS Dashboard on http://0.0.0.0:5000
-```
-
-Flask is now serving the SOC dashboard on port 5000, accessible from the Windows host browser.
-
----
-
-## 9. WINDOWS — OPEN SOC DASHBOARD
-
-On the Windows host browser, navigate to:
-
-```
-http://192.168.56.101:5000
-```
-
-Navigate to: **Dashboard → Recent Alerts**
-
-This is the primary live-detection view for the demo.
-
-> **IMPORTANT:** The dashboard polls for new Suricata alerts every **3 seconds** automatically.
-> You do **NOT** need to refresh the browser manually — new alerts appear on their own.
-
----
-
-## 10. WHAT TO SAY BEFORE THE ATTACK
-
-> *"The dashboard is currently monitoring the Suricata event stream. I will now generate controlled network traffic from the Kali attacker against the isolated Metasploitable2 victim and demonstrate real-time detection and visualization."*
-
----
-
-## 11. TERMINAL 3 — NMAP RECONNAISSANCE
-
-Open a **third terminal** on Kali and run:
+Push:
 
 ```bash
-sudo nmap -Pn -sS -p 21,25,80,443,3306 <METASPLOITABLE-IP>
+git push origin main
 ```
 
-**What this does:**
-Generates controlled TCP SYN reconnaissance traffic against the victim.
-
-**Expected Suricata detection:**
-
-| Field | Value |
-|---|---|
-| Signature | `NIDS LAB - TCP SYN Reconnaissance Detected` |
-| SID | `1000001` |
-
-**Where to look:**
-
-```
-Windows Browser → Dashboard → Recent Alerts
-```
-
-The new alert should appear **automatically within approximately 3 seconds**.
-No manual browser refresh is needed.
-
----
-
-## 12. SECOND NMAP DEMONSTRATION
+For future updates, always verify the working tree before committing:
 
 ```bash
-sudo nmap -Pn -sS -p- <METASPLOITABLE-IP>
-```
-
-This demonstrates broader TCP SYN port scanning across all 65535 ports, producing additional reconnaissance alerts in the dashboard.
-
----
-
-## 13. OPTIONAL NMAP SERVICE ENUMERATION
-
-```bash
-sudo nmap -Pn -sS -sV -p 1-1000 <METASPLOITABLE-IP>
-```
-
-This demonstrates combined reconnaissance and service version identification.
-Keep this step optional — run it only if time permits, as it takes longer.
-
----
-
-## 14. TERMINAL 3 — HYDRA SSH BRUTE-FORCE DEMONSTRATION
-
-```bash
-hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://<METASPLOITABLE-IP>
-```
-
-**Expected Suricata detection:**
-
-| Field | Value |
-|---|---|
-| Signature | `NIDS LAB - SSH Brute Force Activity` |
-| SID | `1000002` |
-
-**Where to look:**
-
-```
-Windows Browser → Dashboard → Recent Alerts
-```
-
-The new alert should appear **automatically within approximately 3 seconds**.
-No manual browser refresh is needed.
-
----
-
-## 15. ALERTS PAGE
-
-After the attacks, navigate to the detailed investigation view:
-
-```
-Windows Browser → Dashboard → Alerts
-```
-
-This page shows full alert records with the following columns:
-
-| Column | Description |
-|---|---|
-| Timestamp | Date and time the event was recorded |
-| Signature | Suricata rule name that fired |
-| Severity | Critical / High / Medium / Low |
-| Category | Suricata alert category |
-| Source | Attacker source IP address |
-| Destination | Victim destination IP address |
-| Protocol | Network protocol (e.g., TCP) |
-| SID | Suricata rule signature ID |
-| Flow ID | Suricata internal flow identifier |
-
-You can filter by Severity, Category, Protocol, Source IP, and Destination IP.
-
----
-
-## 16. TERMINAL 4 — RAW SURICATA EVIDENCE
-
-Show the raw evidence behind the dashboard to the evaluator.
-
-**Fast log (human-readable):**
-
-```bash
-sudo tail -n 10 /var/log/suricata/fast.log
-```
-
-**Structured JSON event log:**
-
-```bash
-sudo tail -n 10 /var/log/suricata/eve.json
-```
-
-This demonstrates that the dashboard data comes directly from Suricata’s live output — no manual injection, no fake data.
-
----
-
-## 17. COMPLETE DATA FLOW
-
-```
-Nmap / Hydra
-    ↓
-Kali Attacker  (192.168.56.101)
-    ↓
-Host-Only Network  (192.168.56.0/24)
-    ↓
-Metasploitable2  (<METASPLOITABLE-IP>)
-    ↓
-Suricata on eth1
-    ↓
-Custom Detection Rules
-    ↓
-/var/log/suricata/eve.json
-    ↓
-Flask Backend  (store.refresh_if_modified)
-    ↓
-Dashboard API  (/api/alerts, /api/stats)
-    ↓
-Live polling (every 3 seconds)
-    ↓
-Recent Alerts table updated
-    ↓
-SOC Dashboard  (http://192.168.56.101:5000)
-```
-
-**Active custom detection rules:**
-
-```
-SID 1000001 — TCP SYN Reconnaissance Detected
-SID 1000002 — SSH Brute Force Activity
+git status
 ```
 
 ---
 
-## 18. DETECTION RULES
+# Final Project Statement
 
-### Rule SID 1000001 — TCP SYN Reconnaissance Detected
+The Network Intrusion Detection Lab demonstrates a complete, controlled cybersecurity monitoring workflow:
 
-Detects repeated TCP SYN traffic patterns that are characteristic of network reconnaissance and port scanning activity.
+```text
+                CONTROLLED ATTACK
+                       |
+                       v
+              NETWORK TRAFFIC
+                       |
+                       v
+              +----------------+
+              |    SURICATA    |
+              |   PASSIVE NIDS |
+              +-------+--------+
+                      |
+                      v
+                  eve.json
+                      |
+                      v
+              +---------------+
+              | FLASK BACKEND |
+              +-------+-------+
+                      |
+                      v
+              +---------------+
+              | SOC DASHBOARD |
+              +---------------+
+                      |
+                      v
+              SECURITY ANALYSIS
+```
 
-**What it detects:** Bursts of TCP SYN packets from a single source toward multiple ports — consistent with scanning tools like Nmap.
+The project demonstrates how network traffic can be generated in a controlled environment, detected using a passive NIDS, converted into structured security events, processed by a backend service, and presented through a SOC-style monitoring dashboard.
 
-> **Note:** The rule detects the *traffic pattern*. It does not claim to prove the source tool was Nmap.
+It provides a practical small-scale representation of the fundamental workflow used in network security monitoring environments.
 
 ---
-
-### Rule SID 1000002 — SSH Brute Force Activity
-
-Detects repeated TCP SYN connection attempts directed at port 22 (SSH) from a single source.
-
-**What it detects:** High-frequency connection attempts to the SSH service — consistent with automated credential-stuffing or brute-force tools.
-
-> **Note:** The rule detects connection attempt patterns. It does not confirm whether any authentication succeeded.
-
----
-
-## 19. OPTIONAL — WIRESHARK PACKET EVIDENCE
-
-For additional packet-level evidence during the demo:
-
-1. Open **Wireshark** on Kali.
-2. Select capture interface: `eth1`.
-3. Start capture.
-
-**Useful display filters:**
-
-| Purpose | Filter |
-|---|---|
-| All TCP traffic | `tcp` |
-| Only SYN packets (reconnaissance) | `tcp.flags.syn == 1` |
-| SSH connection attempts | `tcp.dstport == 22` |
-
-Wireshark is **optional** — it is not required for the core demonstration.
-Use it only if the evaluator asks for packet-level evidence.
-
----
-
-## 20. EXACT FINAL DEMO ORDER — CHECKLIST
-
-```
-[ ] STEP 1   Start Metasploitable2 in VirtualBox.
-
-[ ] STEP 2   Discover victim IP:
-             nmap -sn 192.168.56.0/24
-             Note the Metasploitable2 IP as <METASPLOITABLE-IP>.
-
-[ ] STEP 3   Verify Kali interface:
-             ip addr show eth1
-             Confirm: inet 192.168.56.101/24
-
-[ ] STEP 4   Start Suricata:
-             sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D
-             Verify: ps aux | grep suricata | grep -v grep
-
-[ ] STEP 5   Start Flask:
-             cd ~/Network-Intrusion-Detection-Lab
-             source venv/bin/activate
-             DATA_MODE=suricata SURICATA_EVE_PATH=/var/log/suricata/eve.json FLASK_HOST=0.0.0.0 python3 app.py
-
-[ ] STEP 6   Open Windows browser:
-             http://192.168.56.101:5000
-
-[ ] STEP 7   Stay on:
-             Dashboard → Recent Alerts
-
-[ ] STEP 8   Run Nmap reconnaissance:
-             sudo nmap -Pn -sS -p 21,25,80,443,3306 <METASPLOITABLE-IP>
-
-[ ] STEP 9   Show on dashboard:
-             NIDS LAB - TCP SYN Reconnaissance Detected  (SID 1000001)
-
-[ ] STEP 10  Run Hydra SSH brute-force:
-             hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://<METASPLOITABLE-IP>
-
-[ ] STEP 11  Show on dashboard:
-             NIDS LAB - SSH Brute Force Activity  (SID 1000002)
-
-[ ] STEP 12  Open Alerts page for detailed view:
-             Dashboard → Alerts
-
-[ ] STEP 13  Show fast.log evidence:
-             sudo tail -n 10 /var/log/suricata/fast.log
-
-[ ] STEP 14  Show eve.json evidence:
-             sudo tail -n 10 /var/log/suricata/eve.json
-```
-
----
-
-## 21. FINAL EXPLANATION TO EVALUATOR
-
-> *"Our project is a small-scale simulation of a passive Enterprise Network Intrusion Detection System operating as part of a Security Operations Center. Kali generates controlled attack traffic against an intentionally vulnerable Metasploitable2 server. Suricata monitors the laboratory interface, detects suspicious traffic using custom rules, and writes structured events to eve.json. Our Flask dashboard consumes this live event stream and visualizes the detections in a SOC-style interface."*
-
----
-
-## 22. TEAM MEMBER RESPONSIBILITIES
-
-| Member | Responsibility |
-|---|---|
-| **Devansh Chaubey** | Attack & Reconnaissance — Nmap scanning, Hydra brute-force simulation, controlled attack traffic generation |
-| **Divija Srivastava** | Suricata IDS — Suricata configuration, eth1 packet capture, custom detection rules, eve.json output |
-| **Manya** | Metasploitable2 & Traffic Analysis — victim environment setup, victim-side traffic, Wireshark captures |
-| **Anshika Srivastava** | Flask Dashboard — Flask web app, REST API, eve.json parsing, live polling, SOC dashboard visualization |
-| **Sharat Chodhary** | Integration & Testing — end-to-end pipeline testing, Nmap/Hydra integration testing, live dashboard validation |
-
----
-
-## 23. TROUBLESHOOTING
-
-### Dashboard does not open in browser
-
-Check Flask is running:
-```bash
-ps aux | grep "python.*app.py" | grep -v grep
-```
-
-Check Kali IP is correct:
-```bash
-ip addr show eth1
-```
-
-### Suricata not running
-
-```bash
-ps aux | grep suricata | grep -v grep
-```
-
-If no output, restart Suricata:
-```bash
-sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D
-```
-
-### No alerts appearing on dashboard
-
-Verify victim IP is reachable:
-```bash
-nmap -sn 192.168.56.0/24
-```
-
-Check Suricata is writing to eve.json:
-```bash
-sudo tail -n 10 /var/log/suricata/eve.json
-```
-
-If eve.json is empty or not being written, Suricata may not be capturing on `eth1`.
-
-### Old alerts visible, no new alerts showing
-
-- Stay on **Dashboard → Recent Alerts** (not the Alerts investigation page).
-- Run a fresh Nmap command.
-- Wait approximately 3 seconds — the dashboard polls automatically.
-- Do **not** manually edit eve.json.
-- Do not restart Flask or Suricata mid-demo unless there is a real failure.
-
----
-
-## 24. IMPORTANT DEMO RULES
-
-- Keep Kali and Metasploitable2 on the isolated Host-Only network only.
-- Attack only the laboratory Metasploitable2 target.
-- Discover the victim IP before the demo starts — never assume it.
-- Do not change Suricata configuration during the demo.
-- Do not manually edit or truncate eve.json.
-- Do not manually add fake alerts to the dashboard.
-- Keep Flask running throughout the demonstration.
-- Keep Suricata running throughout the demonstration.
-- Keep the Windows browser open on the dashboard.
-- Use **Recent Alerts** for live detection demonstration.
-- Use **Alerts** page for detailed investigation demonstration.
-- Use `fast.log` and `eve.json` as raw evidence.
-- Wireshark is optional packet-level supplementary evidence.
-
----
-
-## 25. ONE-MINUTE EMERGENCY DEMO
-
-If time is short or something has failed, run only this minimal sequence:
-
-**Terminal 1 — Suricata:**
-```bash
-sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D
-```
-
-**Terminal 2 — Flask:**
-```bash
-cd ~/Network-Intrusion-Detection-Lab
-source venv/bin/activate
-DATA_MODE=suricata SURICATA_EVE_PATH=/var/log/suricata/eve.json FLASK_HOST=0.0.0.0 python3 app.py
-```
-
-**Windows browser:**
-```
-http://192.168.56.101:5000
-```
-Navigate to: **Dashboard → Recent Alerts**
-
-**Terminal 3 — Reconnaissance:**
-```bash
-sudo nmap -Pn -sS -p 21,25,80,443,3306 <METASPLOITABLE-IP>
-```
-
-**Terminal 3 — Brute-force:**
-```bash
-hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://<METASPLOITABLE-IP>
-```
-
-Show **Alerts** page. Done.
-
----
-
-## 26. PROJECT SUCCESS CRITERIA
-
-```
-ATTACK
-  ↓
-NETWORK TRAFFIC
-  ↓
-SURICATA DETECTION
-  ↓
-EVE.JSON EVENT
-  ↓
-FLASK BACKEND
-  ↓
-SOC DASHBOARD
-  ↓
-LIVE ALERT (automatic, no refresh)
-```
-
-**Primary demonstrations:**
-
-```
-Nmap  →  TCP SYN Reconnaissance Detected  (SID 1000001)
-
-Hydra  →  SSH Brute Force Activity  (SID 1000002)
-```
-
-Both alerts appear automatically in the dashboard within approximately 3 seconds of the attack running — **no manual browser refresh required**.
-
----
-
-## Security & Ethical Use
-
-All scanning, traffic generation, reconnaissance, and simulated attack activities in this project are performed exclusively against intentionally vulnerable systems inside the controlled VirtualBox laboratory.
-No unauthorized systems or networks are targeted.
-
----
-
-*Network Intrusion Detection Lab — Controlled Environment · Practical Security · Real-Time Visualization*
