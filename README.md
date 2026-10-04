@@ -1,8 +1,26 @@
-# Network Intrusion Detection Lab (NIDS Lab)
+# Network Intrusion Detection Lab
 
-A small-scale simulation of a **passive Enterprise Network Intrusion Detection System (NIDS)** operating as part of a **Security Operations Center (SOC)** monitoring workflow.
+A hands-on passive NIDS/SOC simulation for detecting and visualizing network reconnaissance and SSH attack activity using Suricata and Flask.
 
-This repository implements a complete, reproducible detection, logging, processing, and visualization pipeline: controlled network reconnaissance and brute-force traffic generated inside an isolated virtual network are detected by a passive Suricata sensor, recorded as structured JSON events (`eve.json`), ingested by a Python/Flask backend, and displayed on a near-real-time SOC-style web dashboard.
+## Dashboard Preview
+
+The Flask-based SOC dashboard visualizes detected network security events and provides a centralized view of Suricata-generated alerts in near-real time. It highlights key security indicators including total alerts, severity classifications, unique source/destination IPs, alert distribution timelines, and a live alert event feed.
+
+![NIDS Dashboard](docs/images/dashboard-preview.png)
+
+## What We Built
+
+This project integrates attack generation, passive network monitoring, rule-based detection, event ingestion, and SOC-style visualization into a reproducible cybersecurity lab.
+
+## Key Features
+
+- Passive Network Intrusion Detection
+- Suricata-based detection
+- Nmap reconnaissance detection
+- SSH attack detection
+- Flask SOC-style dashboard
+- Wireshark network analysis
+- Reproducible cybersecurity lab environment
 
 ---
 
@@ -634,6 +652,26 @@ http://192.168.56.101:5000
   - **Traffic Analysis (`/traffic`):** Bar and doughnut charts illustrating protocol distribution, top sources, and top targets.
   - **Detection Rules (`/rules`):** Table showing parsed custom rules from `nids-lab.rules`.
   - **System Status (`/status`):** Real-time service connectivity health matrix.
+
+### Alert Investigation View (`/alerts`)
+
+The Alert Investigation console provides an analyst workflow for triaging detected security events. It features multi-criteria filtering (by severity, alert category, and IP address) and presents granular telemetry including event timestamps, signature titles, severity levels, source/destination sockets, and rule signature IDs.
+
+![Alert Investigation](docs/images/alert-investigation.png)
+
+### Traffic Analysis Views (`/traffic`)
+
+The Traffic Analysis interface aggregates Suricata alert telemetry into actionable network intelligence:
+
+#### Network Communication Flow Pairs & Protocol Breakdown
+Displays detected communication pairs between the attacker (`192.168.56.101`) and victim (`192.168.56.102`), alongside the transport protocol distribution (100% TCP).
+
+![Traffic Analysis Flows](docs/images/traffic-analysis-flows.png)
+
+#### Port Distribution & Targeted Services
+Visualizes top destination ports, highlighting targeted services such as port 22 (SSH brute force) alongside scanned reconnaissance ports, and graphs source port distributions.
+
+![Traffic Analysis Ports](docs/images/traffic-analysis-ports.png)
 
 ---
 
