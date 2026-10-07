@@ -1,4 +1,4 @@
-# Network Intrusion Detection Lab
+# Network Intrusion Detection System 
 
 A hands-on passive NIDS/SOC simulation for detecting and visualizing network reconnaissance and SSH attack activity using Suricata and Flask.
 
@@ -65,7 +65,7 @@ This project integrates attack generation, passive network monitoring, rule-base
 
 # 1. Project Overview
 
-The **Network Intrusion Detection Lab** is an educational, virtualized cybersecurity engineering project designed to simulate how enterprise intrusion detection sensors capture, process, and present security events to analysts in a Security Operations Center (SOC).
+The **Network Intrusion Detection System** is an educational, virtualized cybersecurity engineering project designed to simulate how enterprise intrusion detection sensors capture, process, and present security events to analysts in a Security Operations Center (SOC).
 
 The lab environment couples an attacker machine, an intentionally vulnerable victim server, an open-source passive Network Intrusion Detection System (Suricata), and an analyst dashboard developed with Flask and vanilla web technologies.
 
@@ -1042,23 +1042,23 @@ sudo truncate -s 0 /var/log/suricata/fast.log
 
 Use this checklist during the live evaluation:
 
-- [ ] **1. VM Verification:** Kali Linux and Metasploitable2 running in VirtualBox.
-- [ ] **2. Interface Check:** `ip addr show eth1` displays `192.168.56.101/24`.
-- [ ] **3. Reachability:** `ping -c 2 192.168.56.102` succeeds with 0% packet loss.
-- [ ] **4. Clean Start:** Old processes verified terminated; port 5000 confirmed free.
-- [ ] **5. Start Suricata:** `sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D`.
-- [ ] **6. Verify Suricata:** `ps aux | grep '[s]uricata'` displays running daemon.
-- [ ] **7. Start Flask:** Run with `DATA_MODE=suricata` and `FLASK_HOST=0.0.0.0`.
-- [ ] **8. Open Dashboard:** Navigate browser to `http://192.168.56.101:5000`.
-- [ ] **9. Verify UI:** Data Mode badge displays `DATA_MODE: SURICATA`.
-- [ ] **10. Execute Test 1:** Run `sudo nmap -Pn -sS -p 1-100 192.168.56.102`.
-- [ ] **11. Observe Alert 1:** `ET SCAN Possible Nmap Port Scan` (SID 1000001) appears automatically in Recent Alerts within ~3 seconds.
-- [ ] **12. Execute Test 5:** Run `hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://192.168.56.102`.
-- [ ] **13. Observe Alert 2:** `NIDS LAB - SSH Brute Force Activity` (SID 1000002) appears automatically in Recent Alerts. Terminate Hydra with `Ctrl+C`.
-- [ ] **14. Ground Truth Verification:** Run `sudo tail -n 5 /var/log/suricata/fast.log` and inspect `eve.json`.
-- [ ] **15. API Demonstration:** Run `curl -s http://127.0.0.1:5000/api/stats` to show JSON data backing the dashboard.
-- [ ] **16. Wireshark (Optional):** Show SYN packets captured on `eth1` matching the alerts.
-- [ ] **17. Clean Shutdown:** Stop Flask and Suricata; verify ports and processes closed.
+- [✓ ] **1. VM Verification:** Kali Linux and Metasploitable2 running in VirtualBox.
+- [✓ ] **2. Interface Check:** `ip addr show eth1` displays `192.168.56.101/24`.
+- [✓ ] **3. Reachability:** `ping -c 2 192.168.56.102` succeeds with 0% packet loss.
+- [✓ ] **4. Clean Start:** Old processes verified terminated; port 5000 confirmed free.
+- [✓ ] **5. Start Suricata:** `sudo suricata -c /etc/suricata/suricata.yaml -i eth1 -l /var/log/suricata -D`.
+- [✓ ] **6. Verify Suricata:** `ps aux | grep '[s]uricata'` displays running daemon.
+- [✓ ] **7. Start Flask:** Run with `DATA_MODE=suricata` and `FLASK_HOST=0.0.0.0`.
+- [✓ ] **8. Open Dashboard:** Navigate browser to `http://192.168.56.101:5000`.
+- [✓ ] **9. Verify UI:** Data Mode badge displays `DATA_MODE: SURICATA`.
+- [✓ ] **10. Execute Test 1:** Run `sudo nmap -Pn -sS -p 1-100 192.168.56.102`.
+- [✓ ] **11. Observe Alert 1:** `ET SCAN Possible Nmap Port Scan` (SID 1000001) appears automatically in Recent Alerts within ~3 seconds.
+- [✓ ] **12. Execute Test 5:** Run `hydra -l msfadmin -P /usr/share/wordlists/metasploit/unix_passwords.txt -t 6 ssh://192.168.56.102`.
+- [✓ ] **13. Observe Alert 2:** `NIDS LAB - SSH Brute Force Activity` (SID 1000002) appears automatically in Recent Alerts. Terminate Hydra with `Ctrl+C`.
+- [✓ ] **14. Ground Truth Verification:** Run `sudo tail -n 5 /var/log/suricata/fast.log` and inspect `eve.json`.
+- [✓ ] **15. API Demonstration:** Run `curl -s http://127.0.0.1:5000/api/stats` to show JSON data backing the dashboard.
+- [✓ ] **16. Wireshark (Optional):** Show SYN packets captured on `eth1` matching the alerts.
+- [✓ ] **17. Clean Shutdown:** Stop Flask and Suricata; verify ports and processes closed.
 
 ---
 
@@ -1146,7 +1146,7 @@ https://github.com/DEVANSH-140206/Network-Intrusion-Detection-Lab
 
 # 33. Final Project Statement
 
-The **Network Intrusion Detection Lab** demonstrates a complete, closed-loop cybersecurity monitoring workflow:
+The **Network Intrusion Detection System** demonstrates a complete, closed-loop cybersecurity monitoring workflow:
 
 ```text
                  CONTROLLED ATTACK
